@@ -55,7 +55,6 @@ namespace HeartRateMonitor
             }
             legend.ToolTip = Words.T("有効な心拍の件数: 0 / 1〜599 / 600〜3,599 / 3,600〜10,799 / 10,800以上", "Valid samples: 0 / 1–599 / 600–3,599 / 3,600–10,799 / 10,800+");
             DockPanel.SetDock(legend, Dock.Right); footer.Children.Add(legend);
-            footer.Children.Add(Text(Words.T("1マス = 1日 · 色の濃さは記録件数", "One cell = one day · shading shows sample count")));
             Children.Add(footer);
         }
         private static TextBlock Metric()

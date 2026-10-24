@@ -27,8 +27,7 @@ namespace HeartRateMonitor
             slider.SetResourceReference(StyleProperty, "HistoryTimelineSlider");
             AutomationProperties.SetAutomationId(slider, id);
             Children.Add(slider);
-            var help = new TextBlock { Text = Words.T("左で短く・右で長く（矢印キーでも調整）", "Shorter ← → Longer (arrow keys to adjust)"), FontSize = 11, TextWrapping = TextWrapping.Wrap };
-            help.SetResourceReference(TextBlock.ForegroundProperty, "TextMuted"); Children.Add(help);
+            AutomationProperties.SetHelpText(slider, Words.T("左右の矢印キーでも調整できます。", "Use the left and right arrow keys to adjust."));
             slider.ValueChanged += (s, e) => { if (!updating) WidthChanged?.Invoke(Decode(slider.Value, maximum)); };
         }
         private long maximum = 3600000;

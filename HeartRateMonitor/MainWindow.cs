@@ -124,10 +124,7 @@ namespace HeartRateMonitor
             advice.SetResourceReference(TextBlock.ForegroundProperty, state.Phase == ConnectionPhase.Error ? "Danger" :
                 state.Phase == ConnectionPhase.NoSignal || state.Problem != ConnectionProblem.None ? "Warning" : "TextMuted");
             advice.Text = state.Problem != ConnectionProblem.None ? ConnectionUpdate.Advice(state.Problem) :
-                state.Phase == ConnectionPhase.AwaitingData ? T("通知を有効にしました。最初の心拍データを待っています。", "Notifications enabled. Waiting for the first heart-rate sample.") :
-                state.Phase == ConnectionPhase.Receiving ? T("心拍データを受信しています。", "Heart-rate samples are arriving.") :
-                state.Phase == ConnectionPhase.NoSignal ? T("装着状態とセンサーの電源を確認してください。", "Check skin contact and sensor power.") :
-                state.Phase == ConnectionPhase.Stopped ? T("自動接続で再開できます。", "Choose Connect to resume.") : T("センサーを装着し、近くで電源を入れてください。", "Wear your sensor and turn it on nearby.");
+                state.Phase == ConnectionPhase.NoSignal ? T("装着状態とセンサーの電源を確認してください。", "Check skin contact and sensor power.") : "";
             connection.ToolTip = state.Detail;
         }
         private void StartAutomatic()

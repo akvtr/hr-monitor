@@ -69,8 +69,8 @@ namespace HeartRateMonitor
 
             var timelineTitle = new DockPanel(); DockPanel.SetDock(historyPosition, Dock.Right); timelineTitle.Children.Add(historyPosition); timelineTitle.Children.Add(Label(T("全体グラフ", "OVERVIEW"), 12));
             var endpoints = new Grid(); endpoints.ColumnDefinitions.Add(new ColumnDefinition()); endpoints.ColumnDefinitions.Add(new ColumnDefinition()); endpoints.Children.Add(historyFirst); Grid.SetColumn(historyLast, 1); historyLast.HorizontalAlignment = HorizontalAlignment.Right; endpoints.Children.Add(historyLast);
-            var help = Label(T("Ctrl＋ホイールで拡大・縮小。下の両端で範囲変更、中央で移動。上のグラフをドラッグすると区間平均を表示（Esc・右クリックで解除）。", "Ctrl+wheel to zoom. Drag overview edges to resize, or its middle to pan. Drag the main chart for interval statistics (Escape / right-click to clear)."), 12);
-            var timeline = Stack(timelineTitle, historyNavigator, endpoints, help); timeline.Margin = new Thickness(0, 6, 0, 0); help.Margin = new Thickness(0, 6, 0, 0); Grid.SetRow(timeline, 2); plotGrid.Children.Add(timeline);
+            historyChart.ToolTip = T("ドラッグで区間を選択 · Ctrl＋ホイールで拡大・縮小 · Escで解除", "Drag to select an interval · Ctrl+wheel to zoom · Esc to clear");
+            var timeline = Stack(timelineTitle, historyNavigator, endpoints); timeline.Margin = new Thickness(0, 6, 0, 0); Grid.SetRow(timeline, 2); plotGrid.Children.Add(timeline);
 
             exportButton = Button(T("表示期間をCSV出力", "Export range to CSV"), ExportClicked, primary: true, id: "HistoryExport", width: 196); exportButton.Margin = new Thickness(16, 0, 0, 0); exportButton.IsEnabled = false;
             exportButton.ToolTip = T("表示期間に含まれる全測定値を書き出します。", "Exports every sample in the displayed range.");

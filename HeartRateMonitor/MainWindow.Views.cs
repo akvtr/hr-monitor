@@ -240,9 +240,12 @@ namespace HeartRateMonitor
             testBpm = new TextBox { Text = "80", Width = 82, Height = 44, VerticalContentAlignment = VerticalAlignment.Center, TextAlignment = TextAlignment.Center, Margin = new Thickness(0, 0, 10, 0), ToolTip = T("テスト心拍数 / bpm", "Test heart rate / bpm") };
             AutomationProperties.SetName(testBpm, T("一回限りのOSCテスト心拍数", "One-shot OSC test heart rate"));
             testButton = Button(T("テスト送信", "Send test"), TestOscClicked, false, "TestOsc", width: 142);
+            string testHelp = T("保存済みの設定で一度だけ送信します。測定記録には追加されません。", "Sends once using saved settings. No measurement is recorded.");
+            testButton.ToolTip = testHelp;
+            AutomationProperties.SetHelpText(testButton, testHelp);
             var testRow = new WrapPanel { VerticalAlignment = VerticalAlignment.Center };
             testRow.Children.Add(Field(T("試験値（bpm）", "Test value (bpm)"), testBpm)); testRow.Children.Add(new Border { Width = 10 }); testRow.Children.Add(testButton);
-            var oscFooter = Stack(testRow, testStatus, Label(T("記録には追加されず、次の実測値で上書きされます。UDP送信成功はVRChat側の受信確認ではありません。", "Tests are not recorded and the next live sample replaces them. UDP success does not confirm receipt in VRChat."), 11));
+            var oscFooter = Stack(testRow, testStatus, Label(T("UDP送信成功はVRChat側の受信確認ではありません。", "UDP success does not confirm receipt in VRChat."), 11));
             testStatus.Margin = new Thickness(0, 8, 0, 4);
             oscDetail.Margin = new Thickness(0, 9, 0, 14);
             return Stack(Heading(T("送信状況とテスト", "Transmission & test")), oscText, oscDetail, oscFooter);
@@ -253,6 +256,9 @@ namespace HeartRateMonitor
             oscEnabled = Check(T("OSC送信を有効にする", "Enable OSC transmission"), settings.OscEnabled);
             oscTimeoutMode = Choice(new[] { T("最終値を維持", "Keep last value"), T("無受信時に両方へ0を送信", "Send both values as zero on timeout") }, settings.OscZeroOnTimeout ? 1 : 0, 360);
             oscTimeoutSeconds = Input(settings.OscTimeoutSeconds.ToString());
+            string timeoutHelp = T("起動または最終通知から計測し、停止中も対象です。0はOSCだけに一度送信し、記録しません。", "Measured since startup or the last notification, including while stopped. Zeros are sent once via OSC and are not recorded.");
+            oscTimeoutSeconds.ToolTip = timeoutHelp;
+            AutomationProperties.SetHelpText(oscTimeoutSeconds, timeoutHelp);
             oscTimeoutSeconds.IsEnabled = settings.OscZeroOnTimeout;
             oscTimeoutMode.SelectionChanged += (s, e) => oscTimeoutSeconds.IsEnabled = oscTimeoutMode.SelectedIndex == 1;
             AutomationProperties.SetAutomationId(oscTimeoutMode, "OscTimeoutMode");
@@ -271,7 +277,8 @@ namespace HeartRateMonitor
                 int index = retentionChoice.SelectedIndex;
                 if (index < 0) return;
                 int days = Settings.RetentionDayOptions[index];
-                retentionHelp.Text = days == 0 ? T("自動削除せず、すべての記録を保存します。記録が増えるにつれて保存容量を使用します。", "Keeps all recordings without automatic deletion. Storage use grows over time.") :
+                retentionHelp.Visibility = days == 0 ? Visibility.Collapsed : Visibility.Visible;
+                retentionHelp.Text = days == 0 ? "" :
                     T($"保存すると、現在時刻から{days}日より古い記録を自動削除します。既存の記録も対象になり、復元・CSV出力できません。必要な記録は変更前に書き出してください。", $"After saving, recordings older than {days} days are deleted automatically, including existing recordings. Deleted data cannot be recovered or exported. Export anything you need before changing this setting.");
                 retentionHelp.SetResourceReference(TextBlock.ForegroundProperty, days == 0 ? "TextMuted" : "Warning");
             };
@@ -283,17 +290,14 @@ namespace HeartRateMonitor
             conversionFields.Children.Add(Field(T("最小 bpm → 0.0", "Minimum bpm → 0.0"), percentMin)); var maxField = Field(T("最大 bpm → 1.0", "Maximum bpm → 1.0"), percentMax); Grid.SetColumn(maxField, 2); conversionFields.Children.Add(maxField);
             var oscSection = Stack(Heading(T("OSC送信先", "OSC destination")), oscEnabled, portFields,
                 Field(T("Intパラメーター名", "Int parameter name"), intName), Field(T("Floatパラメーター名", "Float parameter name"), floatName));
-            var conversionSection = Stack(Heading(T("心拍値の変換", "Value conversion")),
-                Label(T("Float値は指定した心拍範囲を 0.0〜1.0 に変換します。", "Float values map the selected heart-rate range to 0.0–1.0."), 11), conversionFields);
+            var conversionSection = Stack(Heading(T("心拍値の変換", "Value conversion")), conversionFields);
             var timeoutSection = Stack(Heading(T("切断・無受信時", "Receive timeout")),
                 Field(T("切断・無受信時の動作", "Disconnection / receive timeout"), oscTimeoutMode), new Border { Height = 12 },
-                Field(T("無受信時間（秒）", "Receive timeout (seconds)"), oscTimeoutSeconds, T("1〜3600秒。起動または最終通知から計測し、停止中も対象です。0はOSCだけに一度送信し、記録しません。", "1–3600 seconds since startup or the last notification, including while stopped. Zeros are sent once via OSC and are not recorded.")));
+                Field(T("無受信時間（1〜3600秒）", "Receive timeout (1–3600 seconds)"), oscTimeoutSeconds));
             var appearanceSection = Stack(Heading(T("外観と言語", "Appearance & language")), Field(T("テーマ", "Theme"), themeChoice), new Border { Height = 16 }, Field(T("表示言語", "Language"), languageChoice));
             var storageLocation = Label(folder, 11, "TextMuted"); storageLocation.Margin = new Thickness(0, 4, 0, 0);
-            var behaviorSection = Stack(Heading(T("接続と常駐", "Connection & tray")), autoConnect, autoReconnect, closeToTray,
-                Label(T("トレイのメニューから接続の再開やアプリの終了ができます。", "Use the tray menu to resume connecting or exit the app."), 11));
-            var storageSection = Stack(Heading(T("データ保存", "Data storage")), Field(T("保存期間", "Retention period"), retentionChoice), new Border { Height = 12 }, retentionHelp,
-                Label(T("変更は「保存して適用」で反映されます。無期限に戻しても削除済みの記録は復元されません。", "Use Save & apply to apply changes. Switching back to Unlimited does not restore deleted recordings."), 12),
+            var behaviorSection = Stack(Heading(T("接続と常駐", "Connection & tray")), autoConnect, autoReconnect, closeToTray);
+            var storageSection = Stack(Heading(T("データ保存", "Data storage")), Field(T("保存期間", "Retention period"), retentionChoice), retentionHelp,
                 new Border { Height = 18 }, Label(T("データ保存先", "Data location"), 12, "Text"), storageLocation);
             var sections = new Grid { VerticalAlignment = VerticalAlignment.Top };
             AutomationProperties.SetAutomationId(sections, "SettingsSections");
@@ -305,7 +309,7 @@ namespace HeartRateMonitor
                 sections.Children.Add(section);
             }
             var form = Card(sections, new Thickness(24));
-            var content = Stack(Heading(T("設定", "Settings")), Label(T("左のカテゴリで項目を切り替えます。変更は「保存して適用」で反映されます。", "Choose a category on the left. Use Save & apply to apply changes."), 12), new Border { Height = 16 }, form);
+            var content = Stack(Heading(T("設定", "Settings")), new Border { Height = 8 }, form);
             content.MaxWidth = 800; content.HorizontalAlignment = HorizontalAlignment.Stretch;
             content.Margin = new Thickness(0, 0, 12, 0);
             var wrapper = new DockPanel(); var footer = new Grid { Margin = new Thickness(0, 12, 0, 0) };
@@ -341,7 +345,7 @@ namespace HeartRateMonitor
                 BuildUi(); ApplyThemeTransition(true); tray?.Refresh(); Tick(); settingsStatus.Text = T("設定を保存・適用しました。", "Settings saved and applied.");
             } catch (Exception ex) { settingsStatus.Text = T("保存できません: ", "Could not save: ") + ex.Message; }
         }
-        private static string RetentionNotice(int days) => days == 0 ? T("保存期間: 無期限。記録は自動削除しません。保存期間は設定で変更できます。", "Retention: unlimited. Recordings are not deleted automatically. Change the retention period in Settings.") :
-            T($"保存期間: {days}日。期間を過ぎた記録は自動削除され、復元・CSV出力できません。", $"Retention: {days} days. Older recordings are deleted automatically and cannot be recovered or exported.");
+        private static string RetentionNotice(int days) => days == 0 ? T("保存期間: 無期限", "Retention: unlimited") :
+            T($"保存期間: {days}日（自動削除）", $"Retention: {days} days (automatic deletion)");
     }
 }

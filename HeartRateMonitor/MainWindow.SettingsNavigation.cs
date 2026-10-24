@@ -21,8 +21,6 @@ namespace HeartRateMonitor
                 T("送信状況とテスト", "Transmission & test")
             };
             var items = new StackPanel();
-            var title = Heading(T("カテゴリ", "Categories")); title.FontSize = 14;
-            title.Margin = new Thickness(12, 2, 0, 14); items.Children.Add(title);
             settingsLinks = new RadioButton[titles.Length];
             for (int i = 0; i < titles.Length; i++) {
                 int index = i;

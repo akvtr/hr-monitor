@@ -51,7 +51,7 @@ namespace HeartRateMonitor
         }
         private Thumb MakeThumb(string id, string name, string style, Cursor cursor, int edge)
         {
-            var thumb = new Thumb { Height = edge == 0 ? 50 : 28, Width = edge == 0 ? 1 : 12, Cursor = cursor, Focusable = true };
+            var thumb = new Thumb { Height = edge == 0 ? 50 : 28, Width = edge == 0 ? 1 : 12, Cursor = cursor, Focusable = true, ToolTip = name };
             thumb.SetResourceReference(StyleProperty, style);
             AutomationProperties.SetAutomationId(thumb, id); AutomationProperties.SetName(thumb, name);
             overlay.Children.Add(thumb);
