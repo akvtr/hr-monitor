@@ -145,6 +145,7 @@ internal static class Tests
             TestGattAccess();
             TestPresentationAndOsc(folder);
             TestRecordingPipeline(folder);
+            TestOscReceiveTimeout(folder);
             TestHistoryRepository(folder);
             TestCustomOscTransmission(folder);
             TestHistorySelection();
@@ -416,6 +417,75 @@ internal static class Tests
                     Address(floating) == "/avatar/parameters/Custom/Percent" && Type(floating) == 'f' && sent.Percent == 0.375f,
                     "custom OSC transmission preserves configured names, types and conversion bounds");
             } finally { engine.StopAsync().GetAwaiter().GetResult(); }
+        }
+    }
+    private static void TestOscReceiveTimeout(string folder)
+    {
+        string legacyPath = Path.Combine(folder, "osc-timeout-legacy.json");
+        File.WriteAllText(legacyPath, "{\"OscEnabled\":true}");
+        var legacy = Settings.Load(legacyPath);
+        Check(new Settings().OscZeroOnTimeout, "new settings default to sending both OSC values as zero on timeout");
+        Check(legacy.OscZeroOnTimeout && legacy.OscTimeoutSeconds == 5, "settings without an OSC timeout mode default to zeros after five seconds");
+        File.WriteAllText(legacyPath, "{\"OscZeroOnTimeout\":false,\"OscTimeoutSeconds\":12}");
+        var savedKeepLast = Settings.Load(legacyPath);
+        Check(!savedKeepLast.OscZeroOnTimeout && savedKeepLast.OscTimeoutSeconds == 12, "an explicitly saved keep-last mode and interval are preserved");
+        foreach (int seconds in new[] { 0, -1, 3601 }) {
+            var invalid = new Settings { OscTimeoutSeconds = seconds };
+            Throws(invalid.Validate, "invalid OSC receive timeout: " + seconds);
+        }
+        new Settings { OscTimeoutSeconds = 1 }.Validate();
+        new Settings { OscTimeoutSeconds = 3600 }.Validate();
+        string configPath = Path.Combine(folder, "osc-timeout-settings.json");
+        new Settings { OscZeroOnTimeout = true, OscTimeoutSeconds = 12 }.Save(configPath);
+        var loaded = Settings.Load(configPath);
+        Check(loaded.OscZeroOnTimeout && loaded.OscTimeoutSeconds == 12, "OSC timeout settings survive save and reload");
+
+        string database = Path.Combine(folder, "osc-timeout.db");
+        using (var receiver = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0))) {
+            receiver.Client.ReceiveTimeout = 3000;
+            var config = new Settings { Port = ((IPEndPoint)receiver.Client.LocalEndPoint).Port, OscZeroOnTimeout = false, OscTimeoutSeconds = 1, PercentMin = 40, PercentMax = 200,
+                IntParameter = "Timeout/Int", FloatParameter = "Timeout/Float" };
+            var transmissions = new System.Collections.Concurrent.ConcurrentQueue<OscTransmission>();
+            var engine = new RecordingEngine(database, config);
+            engine.Transmitted += transmissions.Enqueue;
+            Action<int, float> receive = (integer, percent) => {
+                IPEndPoint remote = null;
+                byte[] a = receiver.Receive(ref remote), b = receiver.Receive(ref remote);
+                Check(Address(a) == Settings.Address(config.IntParameter) && Type(a) == 'i' && Bits(a) == integer &&
+                    Address(b) == Settings.Address(config.FloatParameter) && Type(b) == 'f' && Bits(b) == BitConverter.ToInt32(BitConverter.GetBytes(percent), 0),
+                    "timeout pipeline emits both configured addresses, correct types and exact values");
+            };
+            try {
+                engine.TestAsync(80).GetAwaiter().GetResult(); receive(80, 0.25f);
+                Thread.Sleep(1200);
+                Check(receiver.Available == 0, "keep-last mode leaves the receiver unchanged after the interval");
+                config.OscZeroOnTimeout = true; engine.Configure(config);
+                receive(0, 0);
+                WaitUntil(() => transmissions.Any(t => t.Timeout));
+                Check(transmissions.Last().Timeout && !transmissions.Last().Test, "startup silence produces an explicitly identified timeout transmission");
+                using (var store = new Store(database)) Check(store.Bounds() == null, "timeout zeros do not fabricate a stored reading");
+                Thread.Sleep(1200);
+                Check(receiver.Available == 0, "a silent period sends zeros once without repeated packets");
+                engine.Accept(new Reading { UnixMs = 1000, Bpm = 80 }); receive(80, 0.25f);
+                Thread.Sleep(600);
+                engine.Accept(new Reading { UnixMs = 2000, Bpm = 0, Contact = false });
+                Thread.Sleep(600);
+                Check(receiver.Available == 0, "even a no-contact notification restarts the receive timer without sending a live value");
+                receive(0, 0);
+                engine.Accept(new Reading { UnixMs = 3000, Bpm = 120 }); receive(120, 0.5f);
+                WaitUntil(() => transmissions.Last().Integer == 120);
+                Check(!transmissions.Last().Timeout, "valid reception resumes normal output after timeout zeros");
+                config.OscZeroOnTimeout = false; engine.Configure(config);
+                Thread.Sleep(1200);
+                Check(receiver.Available == 0, "switching to keep-last cancels the pending timeout");
+                config.OscEnabled = false; config.OscZeroOnTimeout = true; engine.Configure(config);
+                Thread.Sleep(1200);
+                Check(receiver.Available == 0, "disabled OSC suppresses timeout zeros");
+                config.OscEnabled = true; engine.Configure(config); receive(0, 0);
+                engine.TestAsync(80).GetAwaiter().GetResult(); receive(80, 0.25f); receive(0, 0);
+                Check(transmissions.Count(t => t.Test) == 2, "one-shot tests stay separate and do not restart the receive timer");
+            } finally { engine.StopAsync().GetAwaiter().GetResult(); }
+            using (var store = new Store(database)) Check(store.Query(0, long.MaxValue).Count == 3, "only the three real notifications are stored across timeout and test transmissions");
         }
     }
     private static void TestRecordingPipeline(string folder)

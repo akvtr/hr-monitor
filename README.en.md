@@ -32,7 +32,7 @@ CSV exports **the finalized displayed range**, independently of analysis selecti
 
 ## Settings and OSC
 
-Settings contains appearance/language, connection/tray behavior, retention, and OSC. Use **Save & apply** to persist edits. Switching tabs preserves unsaved inputs and scroll position; saving keeps Settings selected. The toolbar sun/moon button switches Light/Dark and saves immediately; select System in Settings to follow Windows again.
+Choose a category on the left of Settings to replace the form on the right. Each category fits without scrolling. Categories cover appearance/language, connection/tray behavior, retention, OSC destination, value conversion, receive timeout, and transmission/testing. Use **Save & apply** to persist edits. Switching categories or visiting Live and History preserves unsaved inputs; saving keeps the current category selected. The toolbar sun/moon button switches Light/Dark and saves immediately; select System in Settings to follow Windows again.
 
 OSC is enabled by default, targeting UDP `127.0.0.1:9000`:
 
@@ -43,7 +43,16 @@ Configure matching avatar parameters and enable OSC in VRChat. Destination IP, p
 
 The transmission section shows destination, send time, values, and errors. **Send test** sends both parameters once using saved settings and an entered heart rate (initially 80, range 1–65535); it creates no stored reading. OSC must be enabled and saved first. A subsequent valid live sample replaces test values. UDP success means the OS accepted the datagrams; verify reception and application in VRChat's OSC debug display.
 
-Zero bpm and explicit lack of contact are stored but not sent. Disconnection or missing notifications sends no replacement value, so the app does not reset the receiver's last value. The Live number clears after five seconds without a fresh sample. Twenty seconds without notifications ends the connection; automatic reconnection retries when enabled. Discovery listens for advertisements for about eight seconds, with five seconds between retry cycles. Permission denial stops automatic retries.
+Zero bpm and explicit lack of contact are stored but not sent as live values. Settings offers two disconnection / receive-timeout modes:
+
+- **Keep last value**: missing notifications send no replacement, leaving the receiver's last value unchanged.
+- **Send both values as zero on timeout** (default): after the configured interval (1–3600 seconds, default 5), send Int `0` and Float `0.0` once. The interval starts at app startup or the last notification, including zero-bpm/no-contact notifications, and also applies while manually stopped. Timeout transmissions are identified in the transmission status and create no stored readings. Valid measurements resume normal output automatically.
+
+Older settings without this option also use the default. Explicitly saved modes and intervals are preserved.
+
+Use **Save & apply** to apply the mode and interval. No zeros are sent while OSC is disabled or after the app exits. Timing uses monotonic elapsed time. If the interval has already expired when a setting is applied, zeros are sent after applying it. One-shot tests do not count as received notifications; timeout zeros can replace test values. UDP success does not guarantee receipt or application.
+
+The Live number clears after five seconds without a fresh sample. Twenty seconds without notifications ends the connection; automatic reconnection retries when enabled. Discovery listens for advertisements for about eight seconds, with five seconds between retry cycles. Permission denial stops automatic retries.
 
 ## Storage and retention
 

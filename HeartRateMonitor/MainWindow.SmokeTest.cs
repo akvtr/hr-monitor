@@ -63,27 +63,61 @@ namespace HeartRateMonitor
                             throw new InvalidOperationException("Closing connection details must preserve page size.");
                         File.AppendAllText(checksPath, $"PASS {language}/{mode}/tab-{i}: details popup preserves window and page dimensions, active theme surface.{Environment.NewLine}");
                         if (i == 2) {
-                            if (tabs.Items.Count != 3 || tabs.SelectedIndex != 2 || settingsScroll.ScrollableHeight <= 0)
-                                throw new InvalidOperationException("Settings must be the third scrollable tab.");
+                            if (tabs.Items.Count != 3 || tabs.SelectedIndex != 2)
+                                throw new InvalidOperationException("Settings must remain the third tab.");
+                            string previousHost = host.Text; host.Text = "127.0.0.3";
+                            var navigationPosition = settingsLinks[0].TranslatePoint(new Point(), this);
+                            for (int category = 0; category < settingsLinks.Length; category++) {
+                                settingsLinks[category].RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                                await Task.Delay(80); UpdateLayout();
+                                var section = settingsSections[category];
+                                var position = settingsLinks[0].TranslatePoint(new Point(), this);
+                                if (settingsCategory != category || settingsLinks[category].IsChecked != true ||
+                                    settingsSections.Count(item => item.IsVisible) != 1 || !section.IsVisible ||
+                                    Math.Abs(position.Y - navigationPosition.Y) > 1 || host.Text != "127.0.0.3")
+                                    throw new InvalidOperationException("Category selection must replace the form, keep navigation fixed and preserve unsaved edits.");
+                                var footer = (FrameworkElement)VisualTreeHelper.GetParent(settingsStatus);
+                                double sectionBottom = section.TranslatePoint(new Point(0, section.ActualHeight), tabs).Y;
+                                double footerTop = footer.TranslatePoint(new Point(), tabs).Y;
+                                if (sectionBottom + 24 > footerTop - 11 || section.DesiredSize.Width > section.ActualWidth + 1)
+                                    throw new InvalidOperationException($"Settings category {category} must fit without scrolling: bottom {sectionBottom}, footer {footerTop}, desired width {section.DesiredSize.Width}, actual {section.ActualWidth}.");
+                                capture($"smoke-{language}-{mode.ToLowerInvariant()}-settings-category-{category}");
+                            }
+                            host.Text = previousHost;
+                            File.AppendAllText(checksPath, $"PASS {language}/{mode}: all seven settings categories replace content, fit without scrolling, keep navigation fixed and preserve unsaved edits.{Environment.NewLine}");
                             var selected = (TabItem)tabs.Items[2]; selected.ApplyTemplate();
                             var selectedShell = (Border)selected.Template.FindName("Shell", selected);
                             var selectedLine = (Border)selected.Template.FindName("SelectedLine", selected);
                             if (!ReferenceEquals(selectedShell.Background, FindResource("AccentSoft")) || !ReferenceEquals(selected.Foreground, FindResource("Text")) || selectedLine.Visibility != Visibility.Visible)
                                 throw new InvalidOperationException("Selected tab must have a soft fill, readable text and a selection line.");
-                            settingsScroll.ScrollToVerticalOffset(Math.Min(160, settingsScroll.ScrollableHeight));
-                            await Task.Delay(80); UpdateLayout(); double offset = settingsScroll.VerticalOffset;
-                            string previousHost = host.Text; host.Text = "127.0.0.2";
+                            NavigateSettings(3);
+                            host.Text = "127.0.0.2";
                             tabs.SelectedIndex = 0; await Task.Delay(50); tabs.SelectedIndex = 2; await Task.Delay(80); UpdateLayout();
-                            if (host.Text != "127.0.0.2" || Math.Abs(settingsScroll.VerticalOffset - offset) > 1)
-                                throw new InvalidOperationException("Switching tabs lost unsaved settings or scroll position.");
+                            if (host.Text != "127.0.0.2" || settingsCategory != 3 || !settingsSections[3].IsVisible)
+                                throw new InvalidOperationException("Switching tabs lost unsaved settings or the selected category.");
                             host.Text = previousHost;
+                            NavigateSettings(5);
+                            oscTimeoutMode.SelectedIndex = 1;
+                            oscTimeoutSeconds.Text = "12";
+                            if (!oscTimeoutSeconds.IsEnabled) throw new InvalidOperationException("Zero-on-timeout mode must enable its interval field.");
                             SaveClicked(null, null); await Task.Delay(200); UpdateLayout();
-                            if (tabs.SelectedIndex != 2 || Math.Abs(settingsScroll.VerticalOffset - offset) > 1)
-                                throw new InvalidOperationException("Saving settings lost the selected tab or scroll position.");
-                            settingsScroll.ScrollToEnd(); await Task.Delay(80); UpdateLayout();
-                            capture($"smoke-{language}-{mode.ToLowerInvariant()}-settings-bottom");
-                            File.AppendAllText(checksPath, $"PASS {language}/{mode}: compact navigation labels, selected line and soft fill, scrollable settings, unsaved edits and scroll position across navigation, Settings retained after save, bottom reachable.{Environment.NewLine}");
-                            settingsScroll.ScrollToTop(); await Task.Delay(50);
+                            var savedOsc = Settings.Load(settingsPath);
+                            if (!savedOsc.OscZeroOnTimeout || savedOsc.OscTimeoutSeconds != 12 || oscTimeoutMode.SelectedIndex != 1 || oscTimeoutSeconds.Text != "12")
+                                throw new InvalidOperationException("OSC timeout mode and interval must persist after saving.");
+                            capture($"smoke-{language}-{mode.ToLowerInvariant()}-osc-timeout");
+                            oscTimeoutSeconds.Text = "0";
+                            SaveClicked(null, null);
+                            if (Settings.Load(settingsPath).OscTimeoutSeconds != 12 || settings.OscTimeoutSeconds != 12)
+                                throw new InvalidOperationException("An invalid OSC timeout must not overwrite saved settings.");
+                            oscTimeoutSeconds.Text = "12";
+                            oscTimeoutMode.SelectedIndex = 0;
+                            if (oscTimeoutSeconds.IsEnabled) throw new InvalidOperationException("Keep-last mode must disable the interval field.");
+                            SaveClicked(null, null); await Task.Delay(80); UpdateLayout();
+                            if (Settings.Load(settingsPath).OscZeroOnTimeout) throw new InvalidOperationException("Keep-last mode must persist.");
+                            if (tabs.SelectedIndex != 2 || settingsCategory != 5 || !settingsSections[5].IsVisible || settingsLinks[5].IsChecked != true)
+                                throw new InvalidOperationException("Saving settings lost the selected tab or category.");
+                            File.AppendAllText(checksPath, $"PASS {language}/{mode}: category retained across tabs and save, OSC timeout persists, invalid interval rejected, interval enabled only in zero mode.{Environment.NewLine}");
+                            NavigateSettings(0);
                         }
                         if (i == 1) {
                             // Isolated smoke mode only: exercise the tightest layout

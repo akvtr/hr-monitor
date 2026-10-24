@@ -13,14 +13,13 @@ namespace HeartRateMonitor
     {
         private TextBlock connection, deviceTitle, advice, bpmText, lastText, oscText, oscDetail, errorText, liveStats, settingsStatus, testStatus;
         private HeartChart liveChart, historyChart;
-        private ComboBox devices, themeChoice, languageChoice, retentionChoice;
-        private TextBox host, port, intName, floatName, percentMin, percentMax, testBpm;
+        private ComboBox devices, themeChoice, languageChoice, retentionChoice, oscTimeoutMode;
+        private TextBox host, port, intName, floatName, percentMin, percentMax, testBpm, oscTimeoutSeconds;
         private CheckBox oscEnabled, autoConnect, autoReconnect, closeToTray;
         private Button scanButton, connectButton, autoButton, stopButton, retryButton, testButton;
         private Popup connectionPopup;
         private Ellipse connectionDot;
         private TabControl tabs;
-        private ScrollViewer settingsScroll;
         private readonly System.Collections.Generic.List<RadioButton> livePresets = new System.Collections.Generic.List<RadioButton>();
         private long liveWidth = 600000;
         private TimeSpanPicker liveSpanPicker;
@@ -92,7 +91,6 @@ namespace HeartRateMonitor
         {
             if (connectionPopup != null) connectionPopup.IsOpen = false;
             int selectedPage = Math.Max(0, tabs?.SelectedIndex ?? 0);
-            double settingsOffset = settingsScroll?.VerticalOffset ?? 0;
             historyRevision++; historyBoundsRevision++; historyDebounce.Stop();
             connection = Label(""); deviceTitle = Label(string.IsNullOrWhiteSpace(settings.LastName) ? T("心拍センサー", "Heart-rate sensor") : settings.LastName, 16, "Text");
             advice = Label("", 12); errorText = Label("", 12, "Danger");
@@ -188,17 +186,8 @@ namespace HeartRateMonitor
                 var tab = new TabItem { Header = Horizontal(icon, label), Content = views[i], ToolTip = descriptions[i] };
                 AutomationProperties.SetAutomationId(tab, "Tab" + i); AutomationProperties.SetName(tab, descriptions[i]); tabs.Items.Add(tab);
             }
-            double savedSettingsOffset = settingsOffset;
             tabs.SelectionChanged += async (s, e) => {
                 if (e.Source != tabs) return;
-                // A left tab strip changes the available content size during selection.
-                // Restore after layout so reattaching Settings cannot reset its scroll.
-                if (e.RemovedItems.Count > 0 && ReferenceEquals(e.RemovedItems[0], tabs.Items[2]))
-                    savedSettingsOffset = settingsScroll.VerticalOffset;
-                if (tabs.SelectedIndex == 2) {
-                    double offset = savedSettingsOffset;
-                    _ = Dispatcher.BeginInvoke(new Action(() => settingsScroll.ScrollToVerticalOffset(offset)), System.Windows.Threading.DispatcherPriority.Loaded);
-                }
                 if (tabs.SelectedIndex == 1) await RefreshHistory(false);
             };
             Grid.SetRow(tabs, 1); root.Children.Add(tabs); errorText.MaxHeight = 45; errorText.Margin = new Thickness(2, 8, 0, 0); Grid.SetRow(errorText, 2); root.Children.Add(errorText);
@@ -206,10 +195,6 @@ namespace HeartRateMonitor
             var toolbar = CreateWindowToolbar(); DockPanel.SetDock(toolbar, Dock.Top);
             shell.Children.Add(toolbar); shell.Children.Add(root);
             Content = shell; tabs.SelectedIndex = Math.Min(selectedPage, tabs.Items.Count - 1);
-            var restoredScroll = settingsScroll;
-            RoutedEventHandler restoreOffset = null;
-            restoreOffset = (s, e) => { restoredScroll.Loaded -= restoreOffset; restoredScroll.ScrollToVerticalOffset(settingsOffset); };
-            restoredScroll.Loaded += restoreOffset;
             RenderConnection(); Tick();
         }
         private UIElement LiveView()
@@ -260,12 +245,18 @@ namespace HeartRateMonitor
             var oscFooter = Stack(testRow, testStatus, Label(T("記録には追加されず、次の実測値で上書きされます。UDP送信成功はVRChat側の受信確認ではありません。", "Tests are not recorded and the next live sample replaces them. UDP success does not confirm receipt in VRChat."), 11));
             testStatus.Margin = new Thickness(0, 8, 0, 4);
             oscDetail.Margin = new Thickness(0, 9, 0, 14);
-            return Stack(new Border { Height = 16 }, Heading(T("送信状況とテスト", "Transmission & test")), oscText, oscDetail, oscFooter);
+            return Stack(Heading(T("送信状況とテスト", "Transmission & test")), oscText, oscDetail, oscFooter);
         }
         private UIElement SettingsView()
         {
             host = Input(settings.Host); port = Input(settings.Port.ToString()); intName = Input(settings.IntParameter); floatName = Input(settings.FloatParameter); percentMin = Input(settings.PercentMin.ToString()); percentMax = Input(settings.PercentMax.ToString());
             oscEnabled = Check(T("OSC送信を有効にする", "Enable OSC transmission"), settings.OscEnabled);
+            oscTimeoutMode = Choice(new[] { T("最終値を維持", "Keep last value"), T("無受信時に両方へ0を送信", "Send both values as zero on timeout") }, settings.OscZeroOnTimeout ? 1 : 0, 360);
+            oscTimeoutSeconds = Input(settings.OscTimeoutSeconds.ToString());
+            oscTimeoutSeconds.IsEnabled = settings.OscZeroOnTimeout;
+            oscTimeoutMode.SelectionChanged += (s, e) => oscTimeoutSeconds.IsEnabled = oscTimeoutMode.SelectedIndex == 1;
+            AutomationProperties.SetAutomationId(oscTimeoutMode, "OscTimeoutMode");
+            AutomationProperties.SetAutomationId(oscTimeoutSeconds, "OscTimeoutSeconds");
             autoConnect = Check(T("起動時に自動接続する", "Connect automatically on startup"), settings.AutoConnect);
             autoReconnect = Check(T("切断時に自動再接続する", "Reconnect after disconnection"), settings.AutoReconnect);
             closeToTray = Check(T("閉じるボタンでタスクトレイに格納", "Keep running in the tray when closed"), settings.CloseToTray);
@@ -290,9 +281,13 @@ namespace HeartRateMonitor
             portFields.Children.Add(Field(T("送信先IPアドレス", "Destination IP address"), host)); var portField = Field(T("ポート", "Port"), port); Grid.SetColumn(portField, 2); portFields.Children.Add(portField);
             var conversionFields = new Grid(); conversionFields.ColumnDefinitions.Add(new ColumnDefinition()); conversionFields.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(18) }); conversionFields.ColumnDefinitions.Add(new ColumnDefinition());
             conversionFields.Children.Add(Field(T("最小 bpm → 0.0", "Minimum bpm → 0.0"), percentMin)); var maxField = Field(T("最大 bpm → 1.0", "Maximum bpm → 1.0"), percentMax); Grid.SetColumn(maxField, 2); conversionFields.Children.Add(maxField);
-            var oscSection = Stack(Heading(T("OSC設定", "OSC settings")), oscEnabled, portFields,
-                Field(T("Intパラメーター名", "Int parameter name"), intName), Field(T("Floatパラメーター名", "Float parameter name"), floatName),
-                Label(T("Float値は指定した心拍範囲を 0.0〜1.0 に変換します。", "Float values map the selected heart-rate range to 0.0–1.0."), 11), conversionFields, OscTestControls());
+            var oscSection = Stack(Heading(T("OSC送信先", "OSC destination")), oscEnabled, portFields,
+                Field(T("Intパラメーター名", "Int parameter name"), intName), Field(T("Floatパラメーター名", "Float parameter name"), floatName));
+            var conversionSection = Stack(Heading(T("心拍値の変換", "Value conversion")),
+                Label(T("Float値は指定した心拍範囲を 0.0〜1.0 に変換します。", "Float values map the selected heart-rate range to 0.0–1.0."), 11), conversionFields);
+            var timeoutSection = Stack(Heading(T("切断・無受信時", "Receive timeout")),
+                Field(T("切断・無受信時の動作", "Disconnection / receive timeout"), oscTimeoutMode), new Border { Height = 12 },
+                Field(T("無受信時間（秒）", "Receive timeout (seconds)"), oscTimeoutSeconds, T("1〜3600秒。起動または最終通知から計測し、停止中も対象です。0はOSCだけに一度送信し、記録しません。", "1–3600 seconds since startup or the last notification, including while stopped. Zeros are sent once via OSC and are not recorded.")));
             var appearanceSection = Stack(Heading(T("外観と言語", "Appearance & language")), Field(T("テーマ", "Theme"), themeChoice), new Border { Height = 16 }, Field(T("表示言語", "Language"), languageChoice));
             var storageLocation = Label(folder, 11, "TextMuted"); storageLocation.Margin = new Thickness(0, 4, 0, 0);
             var behaviorSection = Stack(Heading(T("接続と常駐", "Connection & tray")), autoConnect, autoReconnect, closeToTray,
@@ -300,18 +295,18 @@ namespace HeartRateMonitor
             var storageSection = Stack(Heading(T("データ保存", "Data storage")), Field(T("保存期間", "Retention period"), retentionChoice), new Border { Height = 12 }, retentionHelp,
                 Label(T("変更は「保存して適用」で反映されます。無期限に戻しても削除済みの記録は復元されません。", "Use Save & apply to apply changes. Switching back to Unlimited does not restore deleted recordings."), 12),
                 new Border { Height = 18 }, Label(T("データ保存先", "Data location"), 12, "Text"), storageLocation);
-            var sections = Stack();
+            var sections = new Grid { VerticalAlignment = VerticalAlignment.Top };
             AutomationProperties.SetAutomationId(sections, "SettingsSections");
-            foreach (var section in new[] { appearanceSection, behaviorSection, storageSection, oscSection }) {
-                if (sections.Children.Count > 0) {
-                    var divider = new Border { Height = 1, Margin = new Thickness(0, 24, 0, 24) };
-                    divider.SetResourceReference(Border.BackgroundProperty, "Line"); sections.Children.Add(divider);
-                }
+            settingsSections = new FrameworkElement[] { appearanceSection, behaviorSection, storageSection, oscSection, conversionSection, timeoutSection, (FrameworkElement)OscTestControls() };
+            for (int index = 0; index < settingsSections.Length; index++) {
+                var section = settingsSections[index];
+                section.Visibility = index == settingsCategory ? Visibility.Visible : Visibility.Collapsed;
+                AutomationProperties.SetAutomationId(section, "SettingsSection" + index);
                 sections.Children.Add(section);
             }
             var form = Card(sections, new Thickness(24));
-            var content = Stack(Heading(T("設定", "Settings")), Label(T("表示・接続・保存期間・OSC送信の設定をここで管理します。変更は「保存して適用」で反映されます。", "Manage appearance, connection, retention, and OSC output here. Use Save & apply to apply changes."), 12), new Border { Height = 16 }, form);
-            content.MaxWidth = 800;
+            var content = Stack(Heading(T("設定", "Settings")), Label(T("左のカテゴリで項目を切り替えます。変更は「保存して適用」で反映されます。", "Choose a category on the left. Use Save & apply to apply changes."), 12), new Border { Height = 16 }, form);
+            content.MaxWidth = 800; content.HorizontalAlignment = HorizontalAlignment.Stretch;
             content.Margin = new Thickness(0, 0, 12, 0);
             var wrapper = new DockPanel(); var footer = new Grid { Margin = new Thickness(0, 12, 0, 0) };
             footer.ColumnDefinitions.Add(new ColumnDefinition()); footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -320,10 +315,13 @@ namespace HeartRateMonitor
             saveButton.Margin = new Thickness(0); saveButton.HorizontalAlignment = HorizontalAlignment.Right;
             Grid.SetColumn(saveButton, 1); footer.Children.Add(saveButton);
             DockPanel.SetDock(footer, Dock.Bottom); wrapper.Children.Add(footer);
-            settingsScroll = new ScrollViewer { Content = content, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
-            AutomationProperties.SetAutomationId(settingsScroll, "SettingsScroll");
-            AutomationProperties.SetName(settingsScroll, T("設定内容をスクロール", "Scroll settings"));
-            wrapper.Children.Add(settingsScroll); return wrapper;
+            wrapper.Children.Add(content);
+            var layout = new Grid();
+            layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(184) });
+            layout.ColumnDefinitions.Add(new ColumnDefinition());
+            var navigation = CreateSettingsNavigation();
+            layout.Children.Add(navigation); Grid.SetColumn(wrapper, 1); layout.Children.Add(wrapper);
+            return layout;
         }
         private void SaveClicked(object sender, RoutedEventArgs e)
         {
@@ -334,6 +332,8 @@ namespace HeartRateMonitor
                 if (!int.TryParse(percentMin.Text, out value)) throw new ArgumentException(T("最小心拍数は整数で入力してください。", "Minimum heart rate must be an integer.")); next.PercentMin = value;
                 if (!int.TryParse(percentMax.Text, out value)) throw new ArgumentException(T("最大心拍数は整数で入力してください。", "Maximum heart rate must be an integer.")); next.PercentMax = value;
                 next.OscEnabled = oscEnabled.IsChecked == true; next.AutoConnect = autoConnect.IsChecked == true; next.AutoReconnect = autoReconnect.IsChecked == true; next.CloseToTray = closeToTray.IsChecked == true;
+                next.OscZeroOnTimeout = oscTimeoutMode.SelectedIndex == 1;
+                if (!int.TryParse(oscTimeoutSeconds.Text, out value)) throw new ArgumentException(T("無受信時間は整数で入力してください。", "Receive timeout must be an integer.")); next.OscTimeoutSeconds = value;
                 next.Theme = new[] { "System", "Dark", "Light" }[themeChoice.SelectedIndex]; next.Language = languageChoice.SelectedIndex == 1 ? "en" : "ja";
                 if (retentionChoice.SelectedIndex < 0) throw new ArgumentException(T("保存期間を選択してください。", "Choose a retention period."));
                 next.RetentionDays = Settings.RetentionDayOptions[retentionChoice.SelectedIndex];

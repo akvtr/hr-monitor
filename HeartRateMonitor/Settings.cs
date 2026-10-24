@@ -16,6 +16,8 @@ namespace HeartRateMonitor
         public int PercentMin { get; set; } = 0;
         public int PercentMax { get; set; } = 200;
         public bool OscEnabled { get; set; } = true;
+        public bool OscZeroOnTimeout { get; set; } = true;
+        public int OscTimeoutSeconds { get; set; } = 5;
         public bool AutoReconnect { get; set; } = true;
         public bool AutoConnect { get; set; } = true;
         public string Theme { get; set; } = "System";
@@ -44,6 +46,7 @@ namespace HeartRateMonitor
         }
         public void Validate()
         {
+            if (OscTimeoutSeconds < 1 || OscTimeoutSeconds > 3600) throw new ArgumentException(Words.T("OSCの無受信時間は1〜3600秒で指定してください。", "OSC receive timeout must be between 1 and 3600 seconds."));
             if (!RetentionDayOptions.Contains(RetentionDays)) throw new ArgumentException(Words.T("保存期間を選択してください。", "Choose a retention period."));
             if (Language != "ja" && Language != "en") throw new ArgumentException("Language must be ja or en.");
             if (Theme != "System" && Theme != "Dark" && Theme != "Light") throw new ArgumentException(Words.T("テーマを選択してください。", "Choose a theme."));

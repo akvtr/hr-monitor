@@ -153,6 +153,16 @@ try {
         if (!$option) { throw "Retention option not found: $label" }
         $option.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
     }
+    $contentsBounds = (Find-Control 'SettingsCategory0').Current.BoundingRectangle
+    for ($category = 0; $category -lt 7; $category++) {
+        $categoryControl = Find-Control ('SettingsCategory' + $category)
+        $categoryControl.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
+        Start-Sleep -Milliseconds 100
+        if (!$categoryControl.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Current.IsSelected) { throw "Settings category selection did not navigate: $category" }
+        if ((Find-Control 'SettingsCategory0').Current.BoundingRectangle.Top -ne $contentsBounds.Top) { throw 'Settings contents moved with the form.' }
+    }
+    (Find-Control 'SettingsCategory2').GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
+    Write-Output 'PASS all seven settings categories switch content and stay fixed'
     $selectedRetention = (Find-Control 'RetentionChoice').GetCurrentPattern([System.Windows.Automation.SelectionPattern]::Pattern).Current.GetSelection()
     if ($selectedRetention[0].Current.Name -ne '無期限') { throw 'Retention should default to unlimited.' }
     Select-Retention '7日'
@@ -168,8 +178,10 @@ try {
     if ((Find-Control 'HistoryRetentionNotice').Current.Name -notmatch '7日') { throw 'History retention notice was not updated.' }
     (Find-Control 'Tab2').GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
     Write-Output 'PASS retention defaults to unlimited, warns before deletion, and persists after save'
+    (Find-Control 'SettingsCategory6').GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
     if (!(Find-Control 'TestOsc')) { throw 'One-shot OSC test was not moved to Settings.' }
     Write-Output 'PASS Settings retains the isolated one-shot OSC test control'
+    (Find-Control 'SettingsCategory0').GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
     $language = Find-Control 'LanguageChoice'
     $language.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
     $englishCondition = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'English')
@@ -180,6 +192,7 @@ try {
     if ((Find-Control 'SaveSettings').Current.Name -ne 'Save & apply') { throw 'English UI was not applied immediately.' }
     if ((Get-Content -Raw -Encoding UTF8 (Join-Path $dataPath 'settings.json') | ConvertFrom-Json).Language -ne 'en') { throw 'English language not persisted.' }
     Write-Output 'PASS English applies immediately and persists'
+    (Find-Control 'SettingsCategory2').GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
     $selectedRetention = (Find-Control 'RetentionChoice').GetCurrentPattern([System.Windows.Automation.SelectionPattern]::Pattern).Current.GetSelection()
     if ($selectedRetention[0].Current.Name -ne '7 days') { throw 'Retention selection was lost during language change.' }
     Select-Retention 'Unlimited'
@@ -208,6 +221,7 @@ try {
 } finally {
     if (!$appProcess.HasExited) {
         (Find-Control 'Tab2').GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
+        (Find-Control 'SettingsCategory1').GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
         # Exit is now a tray action. Disable close-to-tray in this isolated profile
         # and close the actual WPF window instead of looking for a removed button.
         $trayNameJa = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, '閉じるボタンでタスクトレイに格納')
