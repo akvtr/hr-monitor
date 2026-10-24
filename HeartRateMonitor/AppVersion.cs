@@ -13,7 +13,7 @@ namespace HeartRateMonitor
 {
     internal static class AppVersion
     {
-        internal const string Product = "0.19.7";
-        internal const string Assembly = "0.19.7.0";
+        internal const string Product = "0.20.0";
+        internal const string Assembly = "0.20.0.0";
     }
 }

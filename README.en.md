@@ -1,4 +1,4 @@
-# Heart Rate Monitor 0.19.7
+# Heart Rate Monitor 0.20.0
 
 A Windows desktop app that receives standard BLE heart-rate notifications, stores readings in SQLite, and displays live and historical charts. It supports VRChat OSC output, CSV export, Japanese/English UI, Light/Dark/System themes, and tray residency. No external account is required.
 
@@ -88,7 +88,7 @@ Additional checks on an interactive Windows desktop:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\ui-smoke.ps1
-.\artifacts\HeartRateMonitor.exe --data-dir .\artifacts\version-0.19.7\verification\render --smoke-test
+.\artifacts\HeartRateMonitor.exe --data-dir .\artifacts\version-0.20.0\verification\render --smoke-test
 ```
 
 The UI script seeds a temporary database labeled `ISOLATED UI TEST`. Rendering smoke mode checks Japanese/English and Light/Dark/System pages, captures PNGs, and writes `smoke-checks.txt`. It saves test settings: always use an isolated `--data-dir`. These are procedures, not a claim they were run during this documentation update.
