@@ -9,4 +9,3 @@ artifacts/
 *.db-shm
 *.db-wal
 *.dpapi
-/docs/
