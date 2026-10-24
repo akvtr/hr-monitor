@@ -26,6 +26,10 @@ namespace HeartRateMonitor
         public void Send(Settings settings, int bpm)
         {
             if (!settings.OscEnabled) return;
+            Send(settings, new OscValues(settings, bpm));
+        }
+        internal void Send(Settings settings, OscValues values)
+        {
             string key = settings.Host + ":" + settings.Port;
             if (client == null || key != endpointKey) {
                 client?.Dispose(); client = null;
@@ -34,9 +38,8 @@ namespace HeartRateMonitor
                 try { next.Connect(new IPEndPoint(ip, settings.Port)); client = next; endpointKey = key; }
                 catch { next.Dispose(); throw; }
             }
-            var integer = Packet(Settings.Address(settings.IntParameter), 'i', Math.Max(0, Math.Min(255, bpm)));
-            var value = settings.Percent(bpm);
-            var floating = Packet(Settings.Address(settings.FloatParameter), 'f', BitConverter.ToInt32(BitConverter.GetBytes(value), 0));
+            var integer = Packet(values.IntAddress, 'i', values.Integer);
+            var floating = Packet(values.FloatAddress, 'f', BitConverter.ToInt32(BitConverter.GetBytes(values.Percent), 0));
             client.Send(integer, integer.Length); client.Send(floating, floating.Length);
         }
         public void Dispose() { client?.Dispose(); }

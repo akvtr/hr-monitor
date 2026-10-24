@@ -145,6 +145,8 @@ internal static class Tests
             TestGattAccess();
             TestPresentationAndOsc(folder);
             TestRecordingPipeline(folder);
+            TestHistoryRepository(folder);
+            TestCustomOscTransmission(folder);
             TestHistorySelection();
             TestChartInteraction();
             TestDailyActivity(folder);
@@ -351,6 +353,69 @@ internal static class Tests
             engine.Accept(new Reading { UnixMs = 2000, Bpm = 76, Device = "isolated test", Session = "test" });
             engine.StopAsync().GetAwaiter().GetResult();
             using (var store = new Store(database)) { var bounds = store.Bounds(); Check(bounds.From == 1000 && bounds.To == 2001, "history bounds include final sample in half-open window"); }
+        }
+    }
+    private static void TestHistoryRepository(string folder)
+    {
+        string database = Path.Combine(folder, "history-repository.db");
+        var history = new HistoryRepository(database);
+        var empty = history.LoadOverview();
+        Check(empty.Bounds == null && empty.Preview.Count == 0 && empty.Overview.Count == 0,
+            "empty history overview has no fabricated bounds or chart points");
+        var range = new TimeWindow(1000, 4000);
+        var detail = history.LoadWindow(range);
+        Check(detail.Summary.Count == 0 && detail.Points.Count == 0, "empty history window has no samples");
+
+        using (var store = new Store(database)) {
+            store.Add(new Reading { UnixMs = 1000, Bpm = 60, Contact = true });
+            store.Add(new Reading { UnixMs = 2000, Bpm = 100 });
+            store.Add(new Reading { UnixMs = 2500, Bpm = 90, Contact = false });
+            store.Add(new Reading { UnixMs = 3000, Bpm = 0 });
+            store.Add(new Reading { UnixMs = 4000, Bpm = 200, Contact = true });
+        }
+        var overview = history.LoadOverview();
+        Check(overview.Bounds.From == 1000 && overview.Bounds.To == 4001 && overview.Preview.Count == 3 && overview.Overview.Count == 3,
+            "history overview reads current bounds and filters invalid chart samples");
+        detail = history.LoadWindow(range);
+        Check(detail.Summary.Count == 2 && detail.Summary.Average == 80 && detail.Summary.Min == 60 && detail.Summary.Max == 100 && detail.Points.Count == 2,
+            "history detail preserves exact statistics and half-open chart boundaries");
+        var analysis = history.Summarize(new TimeWindow(2000, 4000));
+        Check(analysis.Count == 1 && analysis.Average == 100, "history analysis uses its own selected interval");
+        Check(history.LoadActivity(new DateTime(1970, 1, 1), TimeZoneInfo.Utc).Last().Count == 3,
+            "history activity includes only valid samples in the requested calendar day");
+        string csv = Path.Combine(folder, "repository-export.csv");
+        Check(history.Export(csv, range) == 4 && File.ReadAllLines(csv).Length == 5,
+            "history CSV retains invalid samples while respecting the displayed interval");
+        Throws(() => history.Export(folder, range), "history export reports an inaccessible output target");
+        Check(history.LoadWindow(range).Summary.Count == 2, "history queries remain usable after export failure");
+        using (var store = new Store(database)) store.DeleteBefore(4000);
+        Check(history.LoadOverview().Bounds.From == 4000 && history.LoadWindow(range).Summary.Count == 0,
+            "history reload observes retention changes without stale cached records");
+    }
+    private static void TestCustomOscTransmission(string folder)
+    {
+        using (var receiver = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0))) {
+            receiver.Client.ReceiveTimeout = 2000;
+            var config = new Settings {
+                Port = ((IPEndPoint)receiver.Client.LocalEndPoint).Port,
+                IntParameter = "Custom/Bpm", FloatParameter = "/avatar/parameters/Custom/Percent",
+                PercentMin = 100, PercentMax = 300
+            };
+            var engine = new RecordingEngine(Path.Combine(folder, "custom-osc.db"), config);
+            OscTransmission sent = null;
+            engine.Transmitted += value => sent = value;
+            try {
+                engine.TestAsync(175).GetAwaiter().GetResult();
+                IPEndPoint remote = null;
+                var integer = receiver.Receive(ref remote);
+                var floating = receiver.Receive(ref remote);
+                Check(sent != null && sent.Test && sent.IntAddress == Address(integer) && sent.FloatAddress == Address(floating) &&
+                    sent.Integer == Bits(integer) && sent.Percent == BitConverter.ToSingle(BitConverter.GetBytes(Bits(floating)), 0),
+                    "custom OSC status matches the actual transmitted addresses and payloads");
+                Check(Address(integer) == "/avatar/parameters/Custom/Bpm" && Type(integer) == 'i' && Bits(integer) == 175 &&
+                    Address(floating) == "/avatar/parameters/Custom/Percent" && Type(floating) == 'f' && sent.Percent == 0.375f,
+                    "custom OSC transmission preserves configured names, types and conversion bounds");
+            } finally { engine.StopAsync().GetAwaiter().GetResult(); }
         }
     }
     private static void TestRecordingPipeline(string folder)

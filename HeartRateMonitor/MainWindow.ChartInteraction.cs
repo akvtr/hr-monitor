@@ -5,21 +5,21 @@ namespace HeartRateMonitor
 {
     public sealed partial class MainWindow
     {
-        private void ConfigureChartInteraction(HeartChart chart, bool history)
+        private void ConfigureChartInteraction(HeartChart chart, bool isHistory)
         {
             chart.RangeSelectionEnabled = true; chart.ClearSelection();
             chart.AnalysisRequested += async range => {
                 int revision = chart.SelectionRevision;
                 try {
-                    if (!history) { chart.SetSelectionSummary(ChartAnalysis.SummarizeRaw(livePoints, range)); return; }
-                    var summary = await Task.Run(() => { using (var store = new Store(database)) return store.Summary(range.From, range.To); });
+                    if (!isHistory) { chart.SetSelectionSummary(ChartAnalysis.SummarizeRaw(livePoints, range)); return; }
+                    var summary = await Task.Run(() => history.Summarize(range));
                     if (!closing && revision == chart.SelectionRevision && (chart == liveChart || chart == historyChart)) chart.SetSelectionSummary(summary);
                 } catch (Exception ex) {
                     if (!closing && revision == chart.SelectionRevision && (chart == liveChart || chart == historyChart)) chart.SetSelectionSummary(null, ex.Message);
                 }
             };
             chart.ZoomRequested += (anchor, delta) => {
-                if (history) {
+                if (isHistory) {
                     ZoomHistory(anchor, delta);
                 } else {
                     liveChart.ClearSelection();

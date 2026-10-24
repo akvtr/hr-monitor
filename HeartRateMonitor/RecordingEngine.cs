@@ -120,8 +120,9 @@ namespace HeartRateMonitor
         private void Send(OscSender sender, Settings config, int bpm, bool test)
         {
             if (!config.OscEnabled) throw new InvalidOperationException(Words.T("設定でOSC送信を有効にして保存してください。", "Enable OSC in Settings and save first."));
-            sender.Send(config, bpm);
-            Transmitted?.Invoke(new OscTransmission { Endpoint = config.Host + ":" + config.Port, IntAddress = Settings.Address(config.IntParameter), FloatAddress = Settings.Address(config.FloatParameter), Integer = Math.Min(255, bpm), Percent = config.Percent(bpm), Test = test });
+            var values = new OscValues(config, bpm);
+            sender.Send(config, values);
+            Transmitted?.Invoke(new OscTransmission { Endpoint = config.Host + ":" + config.Port, IntAddress = values.IntAddress, FloatAddress = values.FloatAddress, Integer = values.Integer, Percent = values.Percent, Test = test });
         }
         public Task TestAsync(int bpm)
         {

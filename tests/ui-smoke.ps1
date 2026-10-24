@@ -208,7 +208,17 @@ try {
 } finally {
     if (!$appProcess.HasExited) {
         (Find-Control 'Tab2').GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
-        (Find-Control 'ExitApplication').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+        # Exit is now a tray action. Disable close-to-tray in this isolated profile
+        # and close the actual WPF window instead of looking for a removed button.
+        $trayNameJa = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, '閉じるボタンでタスクトレイに格納')
+        $trayNameEn = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'Keep running in the tray when closed')
+        $trayCondition = New-Object System.Windows.Automation.OrCondition($trayNameJa, $trayNameEn)
+        $trayChoice = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $trayCondition)
+        if (!$trayChoice) { throw 'Close-to-tray setting was not found for test cleanup.' }
+        $toggle = $trayChoice.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern)
+        if ($toggle.Current.ToggleState -ne [System.Windows.Automation.ToggleState]::Off) { $toggle.Toggle() }
+        (Find-Control 'SaveSettings').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+        [void][WindowVisibility]::PostMessage($windowHandle, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)
         if (!$appProcess.WaitForExit(8000)) { throw "Test process did not exit cleanly: $($appProcess.Id)" }
     }
 }
