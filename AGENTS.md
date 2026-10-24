@@ -1,29 +1,40 @@
-# Project instructions
+# Repository Guidelines
 
-- Build a Windows desktop heart-rate monitor for standard BLE Heart Rate Service sensors, including the COOSPO HW706.
-- Receive Bluetooth Low Energy Heart Rate Service notifications.
-- Persist timestamped readings in SQLite and provide live and historical charts and CSV export. Do not display received-reading tables on either page.
-- Send VRChat OSC parameters: Int `VRCOSC/Heartrate/Value` and Float `HRPercent` by default. Parameter names, destination, and percent conversion must be configurable.
-- Keep the Japanese UI clear, support reconnection, and report connection/storage/OSC errors.
-- Never fabricate readings in normal operation. Any demo data must be explicitly labeled and isolated.
-- Keep Bluetooth, persistence, OSC, and UI responsibilities separate. Validate protocol parsing, conversion, and persistence with meaningful tests.
-- Document setup, operation, configuration, and hardware-dependent verification limitations.
-- Use WPF on .NET Framework 4.8, Windows WinRT BLE APIs, and the OS-provided winsqlite3.dll. Build without NuGet via `powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -Test`; always run this test build whenever building.
-- The build requires .NET SDK (Roslyn) and Windows SDK metadata. Runtime artifacts live under `artifacts/` and are not source files.
-- Keep the latest verified build and its ZIP directly under `artifacts/`; retain release snapshots under `artifacts/version-X.Y.Z/` and put verification files inside the corresponding version folder. Default builds must maintain this layout. Use `version-0.0.0/` only for legacy artifacts without an assigned product version. Organizing build artifacts alone does not change the product version.
-- Keep test data in temporary or explicitly isolated data directories. Do not use the user's normal database for verification.
-- Automatically discover and connect on startup by default. Prefer the previous verified successful device, even when absent from discovery, then devices advertising or registered with the standard Heart Rate Service. Do not favor a manufacturer or model; names alone do not qualify a device for automatic connection. Explicit stop must cancel discovery/reconnection until the user resumes.
-- Maintain Light, Dark, and System themes for all app-owned controls; store appearance preferences. Use shared theme resources instead of hardcoded UI colors.
-- Avoid pill-shaped badges and stretched status containers. Align the connection bar's button rows using shared grid columns.
-- Beko.BluetoothHeartRateOSC is a behavioral reference, not a source to copy. Preserve the independent implementation.
-- Provide Japanese and English UI. Keep appearance, language, and persistent options exclusively in Settings.
-- Support tray residency with an explicit Exit action, truthful OSC transmission status and isolated one-shot tests, and a history time-window slider starting at a ten-minute scale.
+## Project Structure & Architecture
 
-## Versioning
+`HeartRateMonitor/` contains the C# WPF application: `BluetoothMonitor`, `GattAccess`, and `AutoConnector` handle BLE; `RecordingEngine` coordinates recording; `Store` uses Windows `winsqlite3.dll`; `OscSender` sends VRChat parameters. Keep these responsibilities separate from `MainWindow.*` and chart controls. Shared colors live in `Theme.xaml`; icon assets/generation live in `AppIcon.xaml` and `tools/`. `tests/` contains assertions, UI automation, and Bluetooth diagnostics. Maintain Japanese `README.md` and English `README.en.md` together.
 
-- Use Semantic Versioning as "MAJOR.MINOR.PATCH"; the current product version is "0.19.7".
-- Before "1.0.0", increment MINOR for backward-compatible features and PATCH for backward-compatible fixes. After "1.0.0", increment MAJOR for breaking changes, MINOR for compatible features, and PATCH for compatible fixes.
-- Use "-beta.N" or "-rc.N" for prereleases. Keep product and informational versions as "X.Y.Z" (including any prerelease suffix); use numeric "X.Y.Z.0" for assembly/file versions and the "app.manifest" identity.
-- When changing the version, update "AppVersion" in "HeartRateMonitor/AppVersion.cs", the assembly identity in "HeartRateMonitor/app.manifest", the visible window title, and both README version references together.
+## Build, Test & Run
 
-- Retain readings indefinitely by default, including when migrating settings without a retention preference. Keep retention controls exclusively in Settings: Unlimited, 1, 7, 30, 90, or 365 days. When finite retention is selected, delete expired rows on startup, after applying a changed policy, and at least once per minute during operation. Disclose automatic deletion and its irreversibility in Japanese and English UI and documentation; show the active retention policy on Live and History.
+Requires x64 Windows 10/11, .NET Framework 4.8, .NET SDK Roslyn, and Windows SDK metadata. No NuGet dependencies.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -Test
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\ui-smoke.ps1
+.\artifacts\HeartRateMonitor.exe
+```
+
+Always include `-Test` when building. Run UI automation on an interactive desktop for UI changes. For isolated rendering checks, launch with `--data-dir <isolated-directory> --smoke-test`.
+
+Treat binaries/configuration/ZIP and verification files directly under `artifacts/` as development artifacts, even after verification. Create `artifacts/version-X.Y.Z/` and store finalized version snapshots there only when explicitly instructed by the user. Do not create version directories automatically after implementation, builds, or tests. Reserve existing `version-0.0.0/` for unversioned legacy artifacts. Generated files are not source; reorganizing them does not change product versions.
+
+## Coding Style & Testing
+
+Follow existing C# style: four-space indentation, PascalCase types/methods/properties, camelCase locals/private fields, and matching filenames. No formatter/linter is configured. Extend the dependency-free `tests/Tests.cs` runner using `Test…` methods and descriptive `Check`/`Throws` assertions. Validate parsing, conversion, persistence, reconnection, retention, and changed behavior; no coverage percentage is configured. Use temporary or isolated data, never the normal user database. Document physical-sensor and VRChat verification limitations.
+
+## Product & Data Requirements
+
+- Support standard BLE Heart Rate Service sensors, including HW706, without manufacturer preference. Auto-connect on startup: try the previously verified sensor even if undiscovered, then service-qualified candidates. Names alone do not qualify. Stop suspends discovery/reconnection until resumed.
+- Persist timestamped readings; provide Live/History charts and CSV, never received-reading tables. Never fabricate normal readings; label and isolate demo/test data.
+- Default OSC: Int `VRCOSC/Heartrate/Value`, Float `HRPercent`. Keep destination, names, and conversion configurable. Report connection/storage/OSC errors truthfully; UDP success does not prove delivery. One-shot tests must not create readings.
+- Support Japanese/English, Light/Dark/System themes, shared theme resources, and saved preferences. Keep persistent options in Settings; retain the toolbar theme shortcut. Avoid pill badges and stretched status containers; align connection buttons with shared grid columns. Preserve tray residency with explicit Exit, and History's initial ten-minute window with a one-minute slider minimum.
+- Retain readings indefinitely by default, including migrated settings. Settings alone offers Unlimited/1/7/30/90/365 days. Apply finite cleanup at startup, policy changes, and at least every minute. Disclose irreversible deletion in both languages and documentation; show active retention on Live/History.
+- Beko.BluetoothHeartRateOSC is a behavioral reference, not source to copy.
+
+## Versioning, Commits & Pull Requests
+
+Current version: `0.19.7`. Do not finalize or bump the product version until the user explicitly instructs you to do so. Implementation, builds, tests, and verification alone do not authorize version finalization or creation of `artifacts/version-X.Y.Z/`. When a version change is explicitly requested, use SemVer: before 1.0, MINOR for compatible features and PATCH for fixes; afterward, MAJOR for breaking changes, MINOR for compatible features, and PATCH for fixes. Allow `-beta.N`/`-rc.N`. Update `AppVersion.cs`, manifest identity, visible title, and both README version references together. Product/informational versions use `X.Y.Z` with any prerelease suffix; assembly/file/manifest versions use numeric `X.Y.Z.0`.
+
+History contains only `Initial commit`; no established commit convention exists. Use concise imperative subjects. PRs should explain behavior, link relevant issues, report verification and hardware limits, and include screenshots for visual changes.
+
+- Write GitHub release notes using only change-description bullet lists under applicable top-level headings: `Added`, `Changed`, `Fixed`, and `Removed` (or `Deleted`). Omit categories with no entries; start each bullet with the corresponding verb (for example, `- Added ...`). Do not include test results or counts, verification notes, checksums (SHA), installation instructions, or other supplementary sections or prose.
