@@ -1,0 +1,19 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <DrawingImage x:Key="AppIconDrawing">
+    <DrawingImage.Drawing>
+      <DrawingGroup>
+        <GeometryDrawing Brush="#10181D">
+          <GeometryDrawing.Geometry><RectangleGeometry Rect="4,4,248,248" RadiusX="54" RadiusY="54"/></GeometryDrawing.Geometry>
+        </GeometryDrawing>
+        <GeometryDrawing>
+          <GeometryDrawing.Pen><Pen Brush="#34464C" Thickness="4"/></GeometryDrawing.Pen>
+          <GeometryDrawing.Geometry><RectangleGeometry Rect="4,4,248,248" RadiusX="54" RadiusY="54"/></GeometryDrawing.Geometry>
+        </GeometryDrawing>
+        <GeometryDrawing>
+          <GeometryDrawing.Pen><Pen Brush="#73D9C0" Thickness="14" StartLineCap="Round" EndLineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen>
+          <GeometryDrawing.Geometry><PathGeometry Figures="M 26,132 L 74,132 L 98,84 L 128,178 L 157,101 L 180,132 L 230,132"/></GeometryDrawing.Geometry>
+        </GeometryDrawing>
+      </DrawingGroup>
+    </DrawingImage.Drawing>
+  </DrawingImage>
+</ResourceDictionary>
