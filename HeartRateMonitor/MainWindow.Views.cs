@@ -116,7 +116,6 @@ namespace HeartRateMonitor
             scanButton = Button(T("再検索", "Scan"), ScanClicked, width: 96);
             connectButton = Button(T("選択した機器に接続", "Connect selected"), ConnectClicked, width: 188);
             foreach (var action in new[] { autoButton, stopButton, choose, retryButton, log, scanButton, connectButton }) { action.Height = 36; action.Style = (Style)FindResource("ConnectionAction"); }
-            autoButton.SetResourceReference(Control.BackgroundProperty, "AccentSoft");
             AddActionIcon(autoButton, "M4,1 L12,7 4,13 Z");
             AddActionIcon(stopButton, "M2,2 L12,2 12,12 2,12 Z");
             AddActionIcon(choose, "M1,3 L13,3 M1,7 L13,7 M1,11 L13,11");
@@ -136,6 +135,7 @@ namespace HeartRateMonitor
             for (int i = 0; i < 2; i++) connectionGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             connectionGrid.Children.Add(deviceInfo);
             var primaryActions = new[] { autoButton, stopButton, choose };
+            foreach (var action in primaryActions) action.Style = (Style)FindResource("ConnectionIconAction");
             for (int i = 0; i < primaryActions.Length; i++) { var action = primaryActions[i]; action.Margin = new Thickness(i == 0 ? 0 : 8, 0, 0, 0); Grid.SetColumn(action, i + 1); connectionGrid.Children.Add(action); }
             advice.Margin = new Thickness(0, 6, 0, 0); Grid.SetRow(advice, 1); Grid.SetColumnSpan(advice, 4); connectionGrid.Children.Add(advice);
             var closeDetails = Button(T("閉じる", "Close"), (s, e) => { connectionPopup.IsOpen = false; choose.Focus(); }, id: "CloseConnectionDetails", width: 88);

@@ -271,6 +271,14 @@
       <ControlTemplate.Triggers><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.42"/></Trigger></ControlTemplate.Triggers>
     </ControlTemplate></Setter.Value></Setter>
   </Style>
+  <Style x:Key="ConnectionIconAction" TargetType="Button" BasedOn="{StaticResource ToolbarButton}">
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="Padding" Value="0"/>
+    <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+    <Style.Triggers>
+      <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.42"/><Setter Property="Cursor" Value="Arrow"/></Trigger>
+    </Style.Triggers>
+  </Style>
   <Style x:Key="ConnectionAction" TargetType="Button" BasedOn="{StaticResource ToolbarButton}">
     <Setter Property="Background" Value="{DynamicResource AccentSoft}"/>
     <Setter Property="Foreground" Value="{DynamicResource Text}"/>
