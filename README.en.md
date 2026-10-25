@@ -2,7 +2,7 @@
 
 A Windows desktop app that receives standard BLE heart-rate notifications, stores readings in SQLite, and displays live and historical charts. It supports VRChat OSC output, CSV export, Japanese/English UI, Light/Dark/System themes, and tray residency. No external account is required.
 
-[日本語](README.md) · [Detailed documentation (Japanese)](docs/README.md)
+[日本語](README.md)
 
 ## Requirements and first run
 
@@ -82,17 +82,19 @@ The app uses WPF on .NET Framework 4.8, Windows WinRT BLE APIs, and OS-provided 
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -Test
 ```
 
-The default build writes a snapshot under `artifacts/version-X.Y.Z/`, then publishes the latest EXE, configuration, and ZIP directly under `artifacts/` after requested checks pass. The ZIP includes the EXE, configuration, and both READMEs; docs remain in the source repository. Keep verification output in the matching version folder. `version-0.0.0` is for unversioned legacy artifacts. Exit before replacing a running EXE.
+Development builds overwrite `artifacts/HeartRateMonitor.exe` and place the configuration, both READMEs, and ZIP directly under `artifacts/`. The ZIP includes the EXE, configuration, and both READMEs. Exit from the tray before replacing a running EXE.
+
+Generated files and verification output directly under `artifacts/` are development artifacts. Builds and verification do not finalize the product version or automatically create version directories. Reserve `artifacts/version-X.Y.Z/` for finalized snapshots only when explicitly instructed to finalize a version. The existing `version-0.0.0/` is for unversioned legacy artifacts.
 
 Additional checks on an interactive Windows desktop:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\ui-smoke.ps1
-.\artifacts\HeartRateMonitor.exe --data-dir .\artifacts\version-0.20.0\verification\render --smoke-test
+.\artifacts\HeartRateMonitor.exe --data-dir .\artifacts\verification\render --smoke-test
 ```
 
 The UI script seeds a temporary database labeled `ISOLATED UI TEST`. Rendering smoke mode checks Japanese/English and Light/Dark/System pages, captures PNGs, and writes `smoke-checks.txt`. It saves test settings: always use an isolated `--data-dir`. These are procedures, not a claim they were run during this documentation update.
 
-Tests cover parsing, connection control, OSC and test isolation, settings, SQLite/CSV, retention, history, and analysis. See the [development guide (Japanese)](docs/development.md) for source responsibilities and hardware checks.
+Tests cover parsing, connection control, OSC and test isolation, settings, SQLite/CSV, retention, history, and analysis.
 
 Beko.BluetoothHeartRateOSC is a behavioral reference; this implementation is independent.

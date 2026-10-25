@@ -2,7 +2,7 @@
 
 標準BLE Heart Rate Service対応センサーの心拍を受信し、SQLiteに記録してグラフで確認できるWindowsデスクトップアプリです。VRChat向けOSC送信、CSV出力、日本語・英語UI、Light・Dark・Systemテーマ、タスクトレイ常駐に対応しています。外部アカウントは不要です。
 
-[English](README.en.md) · [ドキュメント](docs/README.md)
+[English](README.en.md)
 
 ## 動作環境と起動
 
@@ -26,8 +26,6 @@ Windows 10/11（64ビット）、.NET Framework 4.8、Bluetooth LE対応アダ�
 - 「記録のリズム」は今日を含む365日分の有効な測定件数を表示します。日付を選ぶとその日の履歴へ移動します。
 - CSVは確定した表示期間の元の測定値を出力します。ドラッグした分析区間とは別です。0 bpm・接触なしの記録も含まれます。
 
-詳細は[操作ガイド](docs/usage.md)を参照してください。
-
 ## 設定とOSC
 
 「設定」では、左のカテゴリを選ぶと右側の設定内容が切り替わります。各カテゴリはスクロールせずに操作できます。カテゴリやライブ・履歴を行き来しても未保存の入力を保持し、保存後も選択中のカテゴリに留まります。言語、テーマ、自動接続・再接続、トレイ常駐、保存期間、OSCを編集し、「保存して適用」で反映します。上部の太陽・月アイコンによるテーマ変更は即座に保存します。
@@ -38,8 +36,6 @@ OSCは初期設定で有効、送信先はUDP `127.0.0.1:9000` です。VRChat�
 - Float32：`/avatar/parameters/HRPercent`。初期設定は0〜200 bpmを0.0〜1.0へ変換します。式は `clamp((bpm - 最小) / (最大 - 最小), 0, 1)` です。
 
 IP・ポート・パラメーター名・換算範囲は変更できます。送信状態と単発テストは設定画面にあります。テストは保存済み設定で2値を一度だけ送信し、測定記録は作りません。UDP送信成功はVRChatでの受信・適用を保証しません。0 bpm・明示的な接触なしは保存しますが送信しません。
-
-[設定と保存データの詳細](docs/configuration.md)
 
 ### 切断・無受信時のOSC動作
 
@@ -68,10 +64,19 @@ WPF / .NET Framework 4.8、Windows WinRT BLE API、OS付属の `winsqlite3.dll` 
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -Test
 ```
 
-成功すると最新版のEXE・設定・ZIPを `artifacts/` 直下、スナップショットを `artifacts/version-X.Y.Z/` に配置します。検証ファイルは対応するバージョンフォルダーに保存します。
+開発ビルドは `artifacts/HeartRateMonitor.exe` を上書きし、設定ファイル・日英README・配布ZIPも `artifacts/` 直下に配置します。ZIPにはEXE・設定ファイル・日英READMEを含みます。実行中のEXEを置き換える前に、トレイからアプリを終了してください。
+
+`artifacts/` 直下の生成物と検証ファイルは開発用です。ビルドや検証ではバージョンを確定せず、バージョン別フォルダーも自動作成しません。`artifacts/version-X.Y.Z/` は明示的に指示されたバージョン確定時のスナップショット用、既存の `version-0.0.0/` はバージョン不明の旧生成物用です。
+
+UI変更時は対話可能なWindowsデスクトップで次の検証も行います。
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\ui-smoke.ps1
+.\artifacts\HeartRateMonitor.exe --data-dir .\artifacts\verification\render --smoke-test
+```
+
+UIスクリプトは `ISOLATED UI TEST` と明示した一時データを使います。描画スモークテストは日本語・英語とLight・Dark・Systemの画面を確認し、PNGと `smoke-checks.txt` を出力します。テスト用の設定も保存するため、`--data-dir` には必ず通常の保存先とは別の専用ディレクトリを指定してください。
 
 自動テストは通知解析、接続制御、OSC、SQLite・CSV、保持期限、履歴・分析などを確認します。実機での動作確認は別です。HW706の実通知・切断復帰・長時間稼働・VRChatへの適用は、実機を使った検証が必要です。
-
-[開発・検証ガイド](docs/development.md) · [今後の検討事項](docs/アップデート予定.md)
 
 Beko.BluetoothHeartRateOSCは動作上の参考とし、実装は独立して作成しています。
