@@ -16,6 +16,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\ui-smoke.ps1
 
 Always include `-Test` when building. Run UI automation on an interactive desktop for UI changes. For isolated rendering checks, launch with `--data-dir <isolated-directory> --smoke-test`.
 
+Always build the current development source into `artifacts/HeartRateMonitor.exe`, overwriting the previous development build. Do not create `artifacts/dev-*` or other per-build directories, and do not retain separate intermediate builds.
+
 Treat binaries/configuration/ZIP and verification files directly under `artifacts/` as development artifacts, even after verification. Create `artifacts/version-X.Y.Z/` and store finalized version snapshots there only when explicitly instructed by the user. Do not create version directories automatically after implementation, builds, or tests. Reserve existing `version-0.0.0/` for unversioned legacy artifacts. Generated files are not source; reorganizing them does not change product versions.
 
 ## Coding Style & Testing

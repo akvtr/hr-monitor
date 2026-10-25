@@ -1,4 +1,4 @@
-param([switch]$Test, [switch]$Diagnostic, [string]$OutputDirectory = 'artifacts')
+param([switch]$Test, [switch]$Diagnostic)
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 $framework = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319'
@@ -6,30 +6,8 @@ $sdk = Get-ChildItem 'C:\Program Files\dotnet\sdk' -Directory | Sort-Object { [v
 $compiler = Join-Path $sdk.FullName 'Roslyn\bincore\csc.dll'
 $metadata = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\UnionMetadata' -Recurse -Filter Windows.winmd | Where-Object { $_.FullName -notmatch 'Facade' } | Sort-Object FullName -Descending | Select-Object -First 1
 if (!$metadata -or !(Test-Path $compiler)) { throw '.NET SDK and Windows 10/11 SDK are required to build.' }
-$versionSource = [IO.File]::ReadAllText((Join-Path $root 'HeartRateMonitor\AppVersion.cs'))
-$versionPattern = 'internal const string Product = "([^"]+)";'
-$versionMatch = [regex]::Match($versionSource, $versionPattern)
-if (!$versionMatch.Success) { throw 'Product version was not found in AppVersion.cs.' }
-$productVersion = $versionMatch.Groups[1].Value
-$artifactRoot = [IO.Path]::GetFullPath((Join-Path $root 'artifacts'))
-$requestedOutput = [IO.Path]::GetFullPath((Join-Path $root $OutputDirectory))
-$defaultOutput = $requestedOutput.TrimEnd('\') -eq $artifactRoot.TrimEnd('\')
-$publishLatest = $defaultOutput
-$out = if ($defaultOutput) { Join-Path $artifactRoot ('version-' + $productVersion) } else { $requestedOutput }
-$releaseNames = @('HeartRateMonitor.exe','HeartRateMonitor.exe.config','AppIcon.ico','HeartRateMonitor.Tests.exe','HeartRateMonitor.Tests.exe.config','HeartRateMonitor-win-x64.zip')
-# Preserve the previous published release before replacing the latest files.
-$previousExe = Join-Path $artifactRoot 'HeartRateMonitor.exe'
-if ($publishLatest -and (Test-Path -LiteralPath $previousExe)) {
-    $previousVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo($previousExe).ProductVersion
-    if ($previousVersion -match '^\d+\.\d+\.\d+(?:-(?:beta|rc)\.\d+)?$' -and $previousVersion -ne $productVersion) {
-        $previousOutput = Join-Path $artifactRoot ('version-' + $previousVersion)
-        New-Item -ItemType Directory -Force $previousOutput | Out-Null
-        foreach ($name in $releaseNames) {
-            $previousFile = Join-Path $artifactRoot $name
-            if (Test-Path -LiteralPath $previousFile) { Copy-Item -LiteralPath $previousFile -Destination (Join-Path $previousOutput $name) -Force }
-        }
-    }
-}
+# Development builds always replace the files directly under artifacts.
+$out = Join-Path $root 'artifacts'
 New-Item -ItemType Directory -Force $out | Out-Null
 $iconPath = Join-Path $out 'AppIcon.ico'
 & (Join-Path $root 'tools\generate-app-icon.ps1') -OutputPath $iconPath
@@ -61,16 +39,7 @@ if ($Diagnostic) {
     Copy-Item (Join-Path $root 'HeartRateMonitor\App.config') (Join-Path $out 'BluetoothDiagnostic.exe.config') -Force
     & (Join-Path $out 'BluetoothDiagnostic.exe')
 }
-if ($defaultOutput) {
-    # Publish only after compilation and the requested checks have succeeded.
-    Copy-Item -LiteralPath (Join-Path $root 'README.md'),(Join-Path $root 'README.en.md') -Destination $out -Force
-    $packageFiles = @('HeartRateMonitor.exe','HeartRateMonitor.exe.config','README.md','README.en.md') | ForEach-Object { Join-Path $out $_ }
-    Compress-Archive -LiteralPath $packageFiles -DestinationPath (Join-Path $out 'HeartRateMonitor-win-x64.zip') -Force
-    if ($publishLatest) { foreach ($name in $releaseNames) {
-        $releaseFile = Join-Path $out $name
-        if (Test-Path -LiteralPath $releaseFile) { Copy-Item -LiteralPath $releaseFile -Destination (Join-Path $artifactRoot $name) -Force }
-    }
-    Write-Host "Latest: $artifactRoot\HeartRateMonitor.exe" }
-}
+Copy-Item -LiteralPath (Join-Path $root 'README.md'),(Join-Path $root 'README.en.md') -Destination $out -Force
+$packageFiles = @('HeartRateMonitor.exe','HeartRateMonitor.exe.config','README.md','README.en.md') | ForEach-Object { Join-Path $out $_ }
+Compress-Archive -LiteralPath $packageFiles -DestinationPath (Join-Path $out 'HeartRateMonitor-win-x64.zip') -Force
 Write-Host "Built: $out\HeartRateMonitor.exe"
-
