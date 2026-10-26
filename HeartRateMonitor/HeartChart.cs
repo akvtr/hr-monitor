@@ -69,15 +69,19 @@ namespace HeartRateMonitor
             if (valid.Count == 0) { Text(dc, Words.T("この期間にデータはありません", "No samples in this window"), left + 18, top + height / 2 - 8); DrawSelection(dc, left, top, width, height, min, max); return; }
             var pen = FrozenPen(accent, 2);
             var rangeBrush = accent.Clone(); rangeBrush.Opacity = 0.22;
-            var range = FrozenPen(rangeBrush, Math.Max(2, width / Math.Max(1, valid.Count)));
+            var range = FrozenPen(rangeBrush, 1);
             // The caller supplies the same sample average used by the summary.
             // History bucket averages cannot be averaged again: bucket counts differ.
             bool showAverage = Average.HasValue && Average.Value >= min && Average.Value <= max;
             double averageY = showAverage ? y(Average.Value) : 0;
             if (showAverage) dc.DrawLine(FrozenPen(ink, 1, DashStyles.Dash), new Point(left, averageY), new Point(left + width, averageY));
-            ChartPoint previous = null;
+            // Keep bucket extrema as thin whiskers behind the average trace.
+            // Scaling their thickness to bucket spacing turns sparse data into boxes.
             foreach (var p in valid) {
                 dc.DrawLine(range, new Point(x(p.UnixMs), y(p.Min)), new Point(x(p.UnixMs), y(p.Max)));
+            }
+            ChartPoint previous = null;
+            foreach (var p in valid) {
                 if (previous != null && p.UnixMs - previous.UnixMs <= GapMs) dc.DrawLine(pen, new Point(x(previous.UnixMs), y(previous.Bpm)), new Point(x(p.UnixMs), y(p.Bpm)));
                 else dc.DrawEllipse(accent, null, new Point(x(p.UnixMs), y(p.Bpm)), 2.5, 2.5);
                 previous = p;

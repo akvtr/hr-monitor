@@ -23,6 +23,7 @@ If automatic discovery fails, the app can still attempt a direct connection usin
 ## Charts, history, and CSV
 
 Charts have no received-reading tables. Summaries and the dashed mean line use valid samples in the displayed period, excluding zero bpm and explicit lack of contact. Hover to inspect nearby samples or aggregated buckets.
+When readings are aggregated for a wider view, the chart shows a mean trace with thin minimum-to-maximum whiskers behind it.
 
 - Presets and a slider select one minute to one hour on Live, or one minute to all retained data on History. History starts at ten minutes. Live uses readings retained in memory during this launch; it does not reload past records.
 - Use `Ctrl`+wheel to zoom. History zooms around the cursor; Live keeps the newest time at the right edge.
