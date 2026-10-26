@@ -225,7 +225,7 @@ try {
 } finally {
     if (!$appProcess.HasExited) {
         (Find-Control 'Tab2').GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
-        (Find-Control 'SettingsCategory1').GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
+        (Find-Control 'SettingsCategory0').GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
         # Exit is now a tray action. Disable close-to-tray in this isolated profile
         # and close the actual WPF window instead of looking for a removed button.
         $trayNameJa = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, '閉じるボタンでタスクトレイに格納')

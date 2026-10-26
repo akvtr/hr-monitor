@@ -65,6 +65,12 @@ namespace HeartRateMonitor
                         if (i == 2) {
                             if (tabs.Items.Count != 3 || tabs.SelectedIndex != 2)
                                 throw new InvalidOperationException("Settings must remain the third tab.");
+                            if (!closeToTray.IsDescendantOf(settingsSections[0]) || !autoConnect.IsDescendantOf(settingsSections[1]) ||
+                                !autoReconnect.IsDescendantOf(settingsSections[1]) || !retentionChoice.IsDescendantOf(settingsSections[2]) ||
+                                !oyasumiEnabled.IsDescendantOf(settingsSections[3]) || !oyasumiPort.IsDescendantOf(settingsSections[3]) ||
+                                !host.IsDescendantOf(settingsSections[4]) || !percentMin.IsDescendantOf(settingsSections[5]) ||
+                                !oscTimeoutMode.IsDescendantOf(settingsSections[5]) || !testButton.IsDescendantOf(settingsSections[6]))
+                                throw new InvalidOperationException("Settings must group general behavior, sensors, storage, OyasumiVR and OSC controls by purpose.");
                             string previousHost = host.Text; host.Text = "127.0.0.3";
                             var navigationPosition = settingsLinks[0].TranslatePoint(new Point(), this);
                             for (int category = 0; category < settingsLinks.Length; category++) {
@@ -90,10 +96,10 @@ namespace HeartRateMonitor
                             var selectedLine = (Border)selected.Template.FindName("SelectedLine", selected);
                             if (!ReferenceEquals(selectedShell.Background, FindResource("AccentSoft")) || !ReferenceEquals(selected.Foreground, FindResource("Text")) || selectedLine.Visibility != Visibility.Visible)
                                 throw new InvalidOperationException("Selected tab must have a soft fill, readable text and a selection line.");
-                            NavigateSettings(3);
+                            NavigateSettings(4);
                             host.Text = "127.0.0.2";
                             tabs.SelectedIndex = 0; await Task.Delay(50); tabs.SelectedIndex = 2; await Task.Delay(80); UpdateLayout();
-                            if (host.Text != "127.0.0.2" || settingsCategory != 3 || !settingsSections[3].IsVisible)
+                            if (host.Text != "127.0.0.2" || settingsCategory != 4 || !settingsSections[4].IsVisible)
                                 throw new InvalidOperationException("Switching tabs lost unsaved settings or the selected category.");
                             host.Text = previousHost;
                             NavigateSettings(5);

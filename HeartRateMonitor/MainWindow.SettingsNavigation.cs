@@ -15,20 +15,20 @@ namespace HeartRateMonitor
         private UIElement CreateSettingsNavigation()
         {
             var titles = new[] {
-                T("外観と言語", "Appearance & language"), T("接続と常駐", "Connection & tray"),
-                T("データ保存", "Data storage"), T("OSC送信先", "OSC destination"),
-                T("心拍値の変換", "Value conversion"), T("切断・無受信時", "Receive timeout"),
+                T("一般", "General"), T("心拍センサー", "Heart-rate sensor"),
+                T("データ保存", "Data storage"), T("OyasumiVR連携", "OyasumiVR integration"),
+                T("送信先とパラメーター", "Destination & parameters"), T("送信値と無受信時の動作", "Values & timeout behavior"),
                 T("送信状況とテスト", "Transmission & test")
             };
             var items = new StackPanel();
             settingsLinks = new RadioButton[titles.Length];
             for (int i = 0; i < titles.Length; i++) {
                 int index = i;
-                if (i == 3) {
-                    var group = Eyebrow("OSC"); group.Margin = new Thickness(12, 22, 0, 8); items.Children.Add(group);
+                if (i == 4) {
+                    var group = Eyebrow(T("OSC送信", "OSC transmission")); group.Margin = new Thickness(12, 22, 0, 8); items.Children.Add(group);
                 }
                 var link = new RadioButton {
-                    Content = new TextBlock { Text = titles[i], TextWrapping = TextWrapping.Wrap },
+                    Content = new TextBlock { Text = i == 5 ? T("送信値と\n無受信時の動作", titles[i]) : titles[i], TextWrapping = TextWrapping.Wrap },
                     GroupName = "SettingsCategories", Style = (Style)FindResource("SettingsNavigationItem"), IsChecked = i == settingsCategory
                 };
                 AutomationProperties.SetAutomationId(link, "SettingsCategory" + i);

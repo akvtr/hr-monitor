@@ -16,7 +16,7 @@ Extract the ZIP and run `HeartRateMonitor.exe`; after a source build, run `artif
 4. **Stop** cancels discovery, connection, and automatic reconnection until **Connect** resumes them. **Details** contains manual selection, Scan, Reconnect, and Copy log.
 5. Closing keeps recording and OSC running in the tray by default. Double-click the icon, choose **Open window**, or run the EXE again to restore it. Choose **Exit** from the tray to drain the recording queue and quit.
 
-The initial UI is Japanese. Choose **設定 → 表示言語 → English → 保存して適用** to switch.
+The initial UI is Japanese. Choose **設定 → 一般 → 表示言語 → English → 保存して適用** to switch.
 
 If automatic discovery fails, the app can still attempt a direct connection using a previously verified device identity. After disconnection, it keeps targeting the same sensor. Discovery permission denial or cancellation through Stop prevents this fallback; an unverified saved address never qualifies.
 
@@ -34,7 +34,7 @@ In History, **Export range to CSV** exports the finalized displayed range. **Exp
 
 ## Settings and OSC
 
-Choose a category on the left of Settings to replace the form on the right. Each category fits without scrolling. Categories cover appearance/language, connection/tray behavior, retention, OSC destination, value conversion, receive timeout, and transmission/testing. Use **Save & apply** to persist edits. Switching categories or visiting Live and History preserves unsaved inputs; saving keeps the current category selected. The toolbar sun/moon button switches Light/Dark and saves immediately; select System in Settings to follow Windows again.
+Choose a category on the left of Settings to replace the form on the right. Each category fits without scrolling. Categories cover General (theme, language, and tray behavior), Heart-rate sensor (automatic connection and reconnection), Data storage, OyasumiVR integration, and OSC transmission. OSC transmission contains Destination & parameters, Values & timeout behavior, and Transmission & test. Use **Save & apply** to persist edits. Switching categories or visiting Live and History preserves unsaved inputs; saving keeps the current category selected. The toolbar sun/moon button switches Light/Dark and saves immediately; select System in Settings to follow Windows again.
 
 OSC is enabled by default, targeting UDP `127.0.0.1:9000`:
 
@@ -72,7 +72,7 @@ Exit from the tray before backing up the entire data directory. To restore, exit
 
 ### Automatic OyasumiVR sleep labels
 
-Run OyasumiVR on the same PC and enable its OSC server. Integration is enabled by default under **Settings → Connection & tray**. The default OSCQuery port, `0`, automatically discovers local listeners owned by OyasumiVR. If discovery fails, enter the **OSCQuery (HTTP) port** shown in OyasumiVR and save. This is different from its OSC UDP port. The host is always `127.0.0.1`. VRChat need not be running, and OSC forwarding destinations need no changes.
+Run OyasumiVR on the same PC and enable its OSC server. Integration is enabled by default under **Settings → OyasumiVR integration**. The default OSCQuery port, `0`, automatically discovers local listeners owned by OyasumiVR. If discovery fails, enter the **OSCQuery (HTTP) port** shown in OyasumiVR and save. This is different from its OSC UDP port. The host is always `127.0.0.1`. VRChat need not be running, and OSC forwarding destinations need no changes.
 
 Every 2 seconds, the app reads the [official sleep-mode address](https://github.com/Raphiiko/OyasumiVR/blob/develop/src-ui/app/services/osc-control/methods/sleep-mode.osc-method.ts), `/OyasumiVR/SleepMode`, through OSCQuery. While enabled, it records **Sleep · OyasumiVR** intervals on the history chart. It only reads OyasumiVR's state. Labels represent sleep mode, not sleep inferred from heart rate.
 

@@ -66,23 +66,24 @@ namespace HeartRateMonitor
             portFields.Children.Add(Field(T("送信先IPアドレス", "Destination IP address"), host)); var portField = Field(T("ポート", "Port"), port); Grid.SetColumn(portField, 2); portFields.Children.Add(portField);
             var conversionFields = new Grid(); conversionFields.ColumnDefinitions.Add(new ColumnDefinition()); conversionFields.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(18) }); conversionFields.ColumnDefinitions.Add(new ColumnDefinition());
             conversionFields.Children.Add(Field(T("最小 bpm → 0.0", "Minimum bpm → 0.0"), percentMin)); var maxField = Field(T("最大 bpm → 1.0", "Maximum bpm → 1.0"), percentMax); Grid.SetColumn(maxField, 2); conversionFields.Children.Add(maxField);
-            var oscSection = Stack(Heading(T("OSC送信先", "OSC destination")), oscEnabled, portFields,
+            var oscSection = Stack(Heading(T("送信先とパラメーター", "Destination & parameters")), oscEnabled, portFields,
                 Field(T("Intパラメーター名", "Int parameter name"), intName), Field(T("Floatパラメーター名", "Float parameter name"), floatName));
-            var conversionSection = Stack(Heading(T("心拍値の変換", "Value conversion")), conversionFields);
-            var timeoutSection = Stack(Heading(T("切断・無受信時", "Receive timeout")),
-                Field(T("切断・無受信時の動作", "Disconnection / receive timeout"), oscTimeoutMode), new Border { Height = 12 },
+            var valuesSection = Stack(Heading(T("送信値と無受信時の動作", "Values & timeout behavior")),
+                Label(T("心拍値の変換（Floatパラメーター）", "Heart-rate conversion (Float parameter)"), 12, "Text"), conversionFields,
+                new Border { Height = 16 }, Field(T("無受信時の送信動作", "Transmission on receive timeout"), oscTimeoutMode), new Border { Height = 12 },
                 Field(T("無受信時間（1〜3600秒）", "Receive timeout (1–3600 seconds)"), oscTimeoutSeconds));
-            var appearanceSection = Stack(Heading(T("外観と言語", "Appearance & language")), Field(T("テーマ", "Theme"), themeChoice), new Border { Height = 16 }, Field(T("表示言語", "Language"), languageChoice));
+            var generalSection = Stack(Heading(T("一般", "General")), Field(T("テーマ", "Theme"), themeChoice), new Border { Height = 16 },
+                Field(T("表示言語", "Language"), languageChoice), new Border { Height = 16 }, closeToTray);
             var storageLocation = Label(folder, 11, "TextMuted"); storageLocation.Margin = new Thickness(0, 4, 0, 0);
-            var behaviorSection = Stack(Heading(T("接続と常駐", "Connection & tray")), autoConnect, autoReconnect, closeToTray,
-                new Border { Height = 12 }, Heading("OyasumiVR"), oyasumiEnabled,
+            var sensorSection = Stack(Heading(T("心拍センサー", "Heart-rate sensor")), autoConnect, autoReconnect);
+            var oyasumiSection = Stack(Heading(T("OyasumiVR連携", "OyasumiVR integration")), oyasumiEnabled,
                 Field(T("OSCQueryポート（0で自動検出）", "OSCQuery port (0 for automatic discovery)"), oyasumiPort),
                 Label(T("同じPCのOyasumiVRでOSCを有効にしてください。2秒ごとに確認し、取得不能な間は睡眠に含めません。", "Enable OSC in OyasumiVR on this PC. Checks every 2 seconds; unavailable periods are excluded."), 12), sleepSettingsStatus);
             var storageSection = Stack(Heading(T("データ保存", "Data storage")), Field(T("保存期間", "Retention period"), retentionChoice), retentionHelp,
                 new Border { Height = 18 }, Label(T("データ保存先", "Data location"), 12, "Text"), storageLocation);
             var sections = new Grid { VerticalAlignment = VerticalAlignment.Top };
             AutomationProperties.SetAutomationId(sections, "SettingsSections");
-            settingsSections = new FrameworkElement[] { appearanceSection, behaviorSection, storageSection, oscSection, conversionSection, timeoutSection, (FrameworkElement)OscTestControls() };
+            settingsSections = new FrameworkElement[] { generalSection, sensorSection, storageSection, oyasumiSection, oscSection, valuesSection, (FrameworkElement)OscTestControls() };
             for (int index = 0; index < settingsSections.Length; index++) {
                 var section = settingsSections[index];
                 section.Visibility = index == settingsCategory ? Visibility.Visible : Visibility.Collapsed;
