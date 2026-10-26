@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net;
 using System.Text;
 using System.Web.Script.Serialization;
+using Windows.Devices.Bluetooth;
 
 namespace HeartRateMonitor
 {
@@ -46,6 +47,9 @@ namespace HeartRateMonitor
         }
         public void Validate()
         {
+            if (LastAddress > 0xFFFFFFFFFFFFUL) throw new ArgumentException(Words.T("前回のBluetoothアドレスが不正です。", "The saved Bluetooth address must fit 48 bits."));
+            if (LastAddressType != -1 && !Enum.IsDefined(typeof(BluetoothAddressType), LastAddressType))
+                throw new ArgumentException(Words.T("前回のBluetoothアドレス種別が不正です。", "The saved Bluetooth address type is invalid."));
             if (OscTimeoutSeconds < 1 || OscTimeoutSeconds > 3600) throw new ArgumentException(Words.T("OSCの無受信時間は1〜3600秒で指定してください。", "OSC receive timeout must be between 1 and 3600 seconds."));
             if (!RetentionDayOptions.Contains(RetentionDays)) throw new ArgumentException(Words.T("保存期間を選択してください。", "Choose a retention period."));
             if (Language != "ja" && Language != "en") throw new ArgumentException("Language must be ja or en.");
@@ -56,22 +60,44 @@ namespace HeartRateMonitor
             if (PercentMin < 0 || PercentMax > 65535 || PercentMax <= PercentMin) throw new ArgumentException(Words.T("変換範囲は 0 ≦ 最小 < 最大 ≦ 65535 にしてください。", "Use a conversion range of 0 <= minimum < maximum <= 65535."));
             if (Address(IntParameter) == Address(FloatParameter)) throw new ArgumentException(Words.T("IntとFloatには別のパラメーター名を指定してください。", "Use distinct names for the Int and Float parameters."));
         }
-        public float Percent(int bpm) => (float)Math.Max(0, Math.Min(1, (bpm - PercentMin) / (double)(PercentMax - PercentMin)));
+        public float Percent(int bpm) => (float)Math.Max(0, Math.Min(1, ((double)bpm - PercentMin) / (PercentMax - PercentMin)));
         public Settings Copy() => (Settings)MemberwiseClone();
         public static Settings Load(string path)
         {
-            if (!File.Exists(path)) return new Settings();
-            var value = new JavaScriptSerializer().Deserialize<Settings>(File.ReadAllText(path, Encoding.UTF8));
+            string json;
+            try { json = ReadJson(path); }
+            catch (FileNotFoundException) { return new Settings(); }
+            catch (DirectoryNotFoundException) { return new Settings(); }
+            var value = new JavaScriptSerializer().Deserialize<Settings>(json);
             if (value == null) throw new FormatException(Words.T("設定ファイルが空です。", "The settings file is empty."));
             value.Validate(); return value;
+        }
+        private static string ReadJson(string path)
+        {
+            byte[] bytes = File.ReadAllBytes(path);
+            var utf8 = new UTF8Encoding(true, true);
+            // Check UTF-32 before UTF-16 because their little-endian preambles overlap.
+            // Every recognized encoding rejects malformed input instead of replacing metadata.
+            Encoding[] encodings = {
+                new UTF32Encoding(false, true, true), new UTF32Encoding(true, true, true),
+                new UnicodeEncoding(false, true, true), new UnicodeEncoding(true, true, true), utf8
+            };
+            foreach (var encoding in encodings) {
+                byte[] preamble = encoding.GetPreamble();
+                if (bytes.Take(preamble.Length).SequenceEqual(preamble))
+                    return encoding.GetString(bytes, preamble.Length, bytes.Length - preamble.Length);
+            }
+            return utf8.GetString(bytes);
         }
         public void Save(string path)
         {
             Validate();
-            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path)));
-            string tmp = path + ".tmp";
-            File.WriteAllText(tmp, new JavaScriptSerializer().Serialize(this), new UTF8Encoding(false));
-            if (File.Exists(path)) File.Replace(tmp, path, path + ".bak"); else File.Move(tmp, path);
+            string destination = Path.GetFullPath(path);
+            string json = new JavaScriptSerializer().Serialize(this);
+            Directory.CreateDirectory(Path.GetDirectoryName(destination));
+            AtomicFile.Write(destination, stream => {
+                using (var writer = new StreamWriter(stream, new UTF8Encoding(false), 1024, true)) writer.Write(json);
+            }, keepBackup: true);
         }
     }
 }

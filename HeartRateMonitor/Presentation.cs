@@ -20,7 +20,7 @@ namespace HeartRateMonitor
             if (text.Contains("SharingViolation")) return ConnectionProblem.Busy;
             if (error is UnauthorizedAccessException || text.Contains("AccessDenied") || text.Contains("DeniedBy")) return ConnectionProblem.Permission;
             if (text.Contains("Unreachable")) return ConnectionProblem.Unreachable;
-            if (error is OperationCanceledException || text.Contains("タイムアウト")) return ConnectionProblem.Timeout;
+            if (error is OperationCanceledException || error is TimeoutException || text.Contains("タイムアウト")) return ConnectionProblem.Timeout;
             if (text.Contains("アダプター")) return ConnectionProblem.Adapter;
             if (text.Contains("20秒")) return ConnectionProblem.NoData;
             return ConnectionProblem.Other;
@@ -52,19 +52,6 @@ namespace HeartRateMonitor
                 case ConnectionProblem.Other: return Words.T("接続ログで失敗した段階を確認できます。再接続を試してください。", "The connection log contains the failed step. Try reconnecting.");
                 default: return Words.T("センサーの電源を入れると自動で接続します。", "Turn on your sensor to connect automatically.");
             }
-        }
-    }
-    public sealed class TimeWindow
-    {
-        public long From { get; }
-        public long To { get; }
-        public TimeWindow(long from, long to) { if (to <= from) throw new ArgumentException("Invalid time range."); From = from; To = to; }
-        public static TimeWindow At(long earliest, long latest, long width, double fraction)
-        {
-            width = Math.Max(1000, width);
-            long end = Math.Max(latest, earliest + width);
-            long start = earliest + (long)((end - earliest - width) * Math.Max(0, Math.Min(1, fraction)));
-            return new TimeWindow(start, start + width);
         }
     }
 }

@@ -14,6 +14,7 @@ namespace HeartRateMonitor
         private HistoryNavigator historyNavigator;
         private TimeSpanPicker historySpanPicker;
         private readonly List<RadioButton> historyPresets = new List<RadioButton>();
+        private static readonly long[] historyPresetWidths = { 600000, 1800000, 3600000, 21600000, 86400000 };
         private List<ChartPoint> historyPreview = new List<ChartPoint>(), historyOverview = new List<ChartPoint>();
         private TextBlock historyStats, historyRange, historyBounds, historyFirst, historyLast, historyPosition, exportStatus;
         private Button exportButton, historyBack, historyForward;
@@ -28,6 +29,7 @@ namespace HeartRateMonitor
         private int activityRevision;
         private bool activityLoading;
         private bool settingHistory, historyTimerAttached, historyLoaded, exportingHistory, historyRefreshPending;
+        private Task historyExport = Task.CompletedTask;
         private async Task RefreshActivity()
         {
             if (activityLoading || activityCalendar == null) return;
@@ -45,13 +47,15 @@ namespace HeartRateMonitor
             _ = RefreshActivity();
             if (historyNavigator.IsInteracting) { historyRefreshPending = true; return; }
             int revision = ++historyBoundsRevision;
+            int selectionRevision = historyRevision;
             try {
                 var snapshot = await Task.Run(() => history.LoadOverview());
                 if (revision != historyBoundsRevision || closing) return;
                 if (historyNavigator.IsInteracting) { historyRefreshPending = true; return; }
                 historyData = snapshot.Bounds; historyPreview = snapshot.Preview; historyOverview = snapshot.Overview;
                 var domain = HistoryDomain();
-                if (latestWindow || historyWindow == null) historyWindow = new TimeWindow(domain.To - historyWidth, domain.To);
+                if ((latestWindow && selectionRevision == historyRevision) || historyWindow == null)
+                    historyWindow = new TimeWindow(domain.To - historyWidth, domain.To);
                 historyWindow = HistorySelection.Clamp(domain, historyWindow);
                 historyWidth = historyWindow.To - historyWindow.From;
                 historyNavigator.SetData(domain, historyOverview, historyWindow, historyData != null);
@@ -59,16 +63,20 @@ namespace HeartRateMonitor
                 await LoadHistory();
             } catch (Exception ex) { if (revision == historyBoundsRevision) historyStats.Text = ex.Message; }
         }
-        private void UpdateHistoryWidth() { historyWidth = historyScaleIndex == 5 ? HistoryDomain().To - HistoryDomain().From : new long[] { 600000, 1800000, 3600000, 21600000, 86400000 }[historyScaleIndex]; }
+        private void UpdateHistoryWidth()
+        {
+            var domain = HistoryDomain();
+            historyWidth = historyScaleIndex == historyPresetWidths.Length ? domain.To - domain.From : historyPresetWidths[historyScaleIndex];
+        }
         private TimeWindow HistoryDomain()
         {
             long end = historyData?.To ?? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             long start = Math.Min(historyData?.From ?? end - 600000, end - 600000);
             return new TimeWindow(Math.Min(start, calendarDay?.From ?? start), Math.Max(end, calendarDay?.To ?? end));
         }
-        private TimeWindow CurrentHistory()
+        private TimeWindow CurrentHistory() => CurrentHistory(HistoryDomain());
+        private TimeWindow CurrentHistory(TimeWindow domain)
         {
-            var domain = HistoryDomain();
             return HistorySelection.Clamp(domain, historyWindow ?? new TimeWindow(domain.To - historyWidth, domain.To));
         }
         private void MoveHistoryTo(long end)
@@ -81,34 +89,41 @@ namespace HeartRateMonitor
         private void ScheduleHistory()
         {
             historyChart.ClearSelection();
-            historyRevision++; historyWindow = CurrentHistory();
-            var start = DateTimeOffset.FromUnixTimeMilliseconds(historyWindow.From).LocalDateTime;
-            var end = DateTimeOffset.FromUnixTimeMilliseconds(historyWindow.To).LocalDateTime;
+            var domain = HistoryDomain();
+            historyRevision++; historyWindow = CurrentHistory(domain);
             historyWidth = historyWindow.To - historyWindow.From;
-            historyNavigator.SetSelection(historyWindow);
-            historySpanPicker?.Update(historyWidth, HistoryDomain().To - HistoryDomain().From, historyData != null);
-            var widths = new long[] { 600000, 1800000, 3600000, 21600000, 86400000 };
-            historyScaleIndex = Array.IndexOf(widths, historyWidth);
-            if (historyScaleIndex < 0 && historyWidth == HistoryDomain().To - HistoryDomain().From) historyScaleIndex = 5;
-            settingHistory = true;
-            for (int i = 0; i < historyPresets.Count; i++) historyPresets[i].IsChecked = i == historyScaleIndex;
-            settingHistory = false;
-            historyRange.Text = start.ToString("HH:mm:ss") + "  —  " + end.ToString("HH:mm:ss");
-            historyBounds.Text = start.Date == end.Date ? start.ToString("yyyy/MM/dd (ddd)") : start.ToString("yyyy/MM/dd") + "  →  " + end.ToString("yyyy/MM/dd");
-            historyRange.ToolTip = LocalTime(historyWindow.From) + "  →  " + LocalTime(historyWindow.To);
-            long travel = historyData == null ? 0 : Math.Max(0, historyData.To - historyData.From - historyWidth);
-            long earliest = HistoryDomain().From;
-            historyBack.IsEnabled = historyData != null && historyWindow.From > earliest;
-            historyForward.IsEnabled = historyData != null && historyWindow.To < HistoryDomain().To;
-            historyFirst.Text = historyData == null ? T("記録はまだありません", "No recordings yet") : T("最初  ", "First  ") + TimelineTime(historyData.From);
-            historyLast.Text = historyData == null ? "" : T("最新  ", "Latest  ") + TimelineTime(historyData.To - 1);
-            historyPosition.Text = historyData == null ? T("記録待ち", "Awaiting recordings") : travel == 0 ? T("全記録を表示", "All recordings shown") : historyWindow.To >= historyData.To ? T("最新の期間", "Latest window") : T("過去の期間", "Earlier window");
+            SynchronizeHistoryControls(domain);
+            UpdateHistoryLabels(domain);
             historyLoaded = false; exportButton.IsEnabled = false;
             historyStats.Text = historyNavigator.IsInteracting ? T("範囲を調整中 · グラフは概要表示", "Adjusting range · chart preview") : T("読み込み中…", "Loading…");
             historyChart.Average = null;
             historyChart.Points = HistorySelection.Preview(historyPreview, historyWindow); historyChart.From = historyWindow.From; historyChart.To = historyWindow.To;
             historyChart.GapMs = Math.Max(15000, (historyWindow.To - historyWindow.From) / 400 * 2); historyChart.InvalidateVisual();
             historyDebounce.Stop(); if (!historyNavigator.IsInteracting) historyDebounce.Start();
+        }
+        private void SynchronizeHistoryControls(TimeWindow domain)
+        {
+            historyNavigator.SetSelection(historyWindow);
+            historySpanPicker?.Update(historyWidth, domain.To - domain.From, historyData != null);
+            historyScaleIndex = Array.IndexOf(historyPresetWidths, historyWidth);
+            if (historyScaleIndex < 0 && historyWidth == domain.To - domain.From) historyScaleIndex = historyPresetWidths.Length;
+            settingHistory = true;
+            for (int i = 0; i < historyPresets.Count; i++) historyPresets[i].IsChecked = i == historyScaleIndex;
+            settingHistory = false;
+        }
+        private void UpdateHistoryLabels(TimeWindow domain)
+        {
+            var start = DateTimeOffset.FromUnixTimeMilliseconds(historyWindow.From).LocalDateTime;
+            var end = DateTimeOffset.FromUnixTimeMilliseconds(historyWindow.To).LocalDateTime;
+            historyRange.Text = start.ToString("HH:mm:ss") + "  —  " + end.ToString("HH:mm:ss");
+            historyBounds.Text = start.Date == end.Date ? start.ToString("yyyy/MM/dd (ddd)") : start.ToString("yyyy/MM/dd") + "  →  " + end.ToString("yyyy/MM/dd");
+            historyRange.ToolTip = LocalTime(historyWindow.From) + "  →  " + LocalTime(historyWindow.To);
+            long travel = historyData == null ? 0 : Math.Max(0, historyData.To - historyData.From - historyWidth);
+            historyBack.IsEnabled = historyData != null && historyWindow.From > domain.From;
+            historyForward.IsEnabled = historyData != null && historyWindow.To < domain.To;
+            historyFirst.Text = historyData == null ? T("記録はまだありません", "No recordings yet") : T("最初  ", "First  ") + TimelineTime(historyData.From);
+            historyLast.Text = historyData == null ? "" : T("最新  ", "Latest  ") + TimelineTime(historyData.To - 1);
+            historyPosition.Text = historyData == null ? T("記録待ち", "Awaiting recordings") : travel == 0 ? T("全記録を表示", "All recordings shown") : historyWindow.To >= historyData.To ? T("最新の期間", "Latest window") : T("過去の期間", "Earlier window");
         }
         private static string LocalTime(long value) => DateTimeOffset.FromUnixTimeMilliseconds(value).LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss");
         private static string TimelineTime(long value) => DateTimeOffset.FromUnixTimeMilliseconds(value).LocalDateTime.ToString("MM/dd HH:mm");
@@ -132,12 +147,14 @@ namespace HeartRateMonitor
             var range = historyWindow;
             try {
                 var dialog = new SaveFileDialog { FileName = "heartrate-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".csv", Filter = "CSV (*.csv)|*.csv", AddExtension = true, DefaultExt = ".csv" };
-                if (dialog.ShowDialog(this) != true) return;
+                if (dialog.ShowDialog(this) != true || closing) return;
                 exportingHistory = true; exportButton.IsEnabled = false; exportStatus.Text = T("CSVを書き出し中…", "Exporting CSV…");
-                var count = await Task.Run(() => history.Export(dialog.FileName, range));
+                var export = Task.Run(() => history.Export(dialog.FileName, range));
+                historyExport = export;
+                var count = await export;
                 exportStatus.Text = T($"{count:N0}件を書き出しました: ", $"Exported {count:N0} samples: ") + dialog.FileName;
             } catch (Exception ex) { exportStatus.Text = T("書き出しエラー: ", "Export failed: ") + ex.Message; }
-            finally { exportingHistory = false; exportButton.IsEnabled = historyLoaded && historyData != null; }
+            finally { historyExport = Task.CompletedTask; exportingHistory = false; exportButton.IsEnabled = historyLoaded && historyData != null; }
         }
     }
 }

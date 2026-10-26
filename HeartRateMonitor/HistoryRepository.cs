@@ -13,17 +13,19 @@ namespace HeartRateMonitor
         internal HistoryOverview LoadOverview()
         {
             using (var store = new Store(database)) {
-                var bounds = store.Bounds();
-                return new HistoryOverview(bounds,
-                    bounds == null ? new List<ChartPoint>() : store.Chart(bounds.From, bounds.To, 14400),
-                    bounds == null ? new List<ChartPoint>() : store.Chart(bounds.From, bounds.To, 1200));
+                return store.ReadSnapshot(() => {
+                    var bounds = store.Bounds();
+                    return new HistoryOverview(bounds,
+                        bounds == null ? new List<ChartPoint>() : store.Chart(bounds.From, bounds.To, ChartBuckets.MaximumPoints),
+                        bounds == null ? new List<ChartPoint>() : store.Chart(bounds.From, bounds.To, 1200));
+                });
             }
         }
 
         internal HistoryDetail LoadWindow(TimeWindow range)
         {
             using (var store = new Store(database))
-                return new HistoryDetail(store.Summary(range.From, range.To), store.Chart(range.From, range.To));
+                return store.ReadSnapshot(() => new HistoryDetail(store.Summary(range.From, range.To), store.Chart(range.From, range.To)));
         }
 
         internal HistorySummary Summarize(TimeWindow range)
@@ -33,7 +35,8 @@ namespace HeartRateMonitor
 
         internal List<DailyActivity> LoadActivity(DateTime today, TimeZoneInfo zone)
         {
-            using (var store = new Store(database)) return store.DailyActivity(today.Date.AddDays(-364), today.Date, zone);
+            using (var store = new Store(database))
+                return store.ReadSnapshot(() => store.DailyActivity(today.Date.AddDays(-364), today.Date, zone));
         }
 
         internal long Export(string path, TimeWindow range)

@@ -12,13 +12,11 @@ namespace HeartRateMonitor
     {
         private Button themeToggle;
         private Path themeIcon;
-        private RotateTransform themeRotation;
         private Button CreateThemeButton()
         {
-            themeRotation = new RotateTransform();
             themeIcon = new Path { Width = 22, Height = 22, Stretch = Stretch.Uniform,
                 StrokeThickness = 1.7, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round,
-                RenderTransformOrigin = new Point(0.5, 0.5), RenderTransform = themeRotation };
+                RenderTransformOrigin = new Point(0.5, 0.5), RenderTransform = new RotateTransform() };
             themeIcon.SetResourceReference(Shape.StrokeProperty, "Text");
             themeIcon.Width = themeIcon.Height = 16;
             themeToggle = new Button { Content = themeIcon, Width = 36, Height = 32,
@@ -51,13 +49,16 @@ namespace HeartRateMonitor
             themeIcon.Data = Geometry.Parse(dark
                 ? "M12,7 A5,5 0 1 1 12,17 A5,5 0 1 1 12,7 M12,1 L12,3 M12,21 L12,23 M1,12 L3,12 M21,12 L23,12 M4.2,4.2 L5.6,5.6 M18.4,18.4 L19.8,19.8 M4.2,19.8 L5.6,18.4 M18.4,5.6 L19.8,4.2"
                 : "M20.5,14.5 A9,9 0 1 1 9.5,3.5 A7,7 0 0 0 20.5,14.5");
-            themeRotation.BeginAnimation(RotateTransform.AngleProperty, null);
+            var previous = (RotateTransform)themeIcon.RenderTransform;
+            previous.BeginAnimation(RotateTransform.AngleProperty, null);
+            var rotation = new RotateTransform();
+            themeIcon.RenderTransform = rotation;
             if (!animate || !ThemeManager.CanAnimate) return;
             var turn = new DoubleAnimation(dark ? -90 : 90, 0, TimeSpan.FromMilliseconds(360)) {
                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }, FillBehavior = FillBehavior.Stop
             };
-            turn.Completed += (s, e) => themeRotation.BeginAnimation(RotateTransform.AngleProperty, null);
-            themeRotation.BeginAnimation(RotateTransform.AngleProperty, turn);
+            turn.Completed += (s, e) => rotation.BeginAnimation(RotateTransform.AngleProperty, null);
+            rotation.BeginAnimation(RotateTransform.AngleProperty, turn);
         }
     }
 }

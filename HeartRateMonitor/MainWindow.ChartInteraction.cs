@@ -26,8 +26,6 @@ namespace HeartRateMonitor
                     var domain = new TimeWindow(0, 3600000);
                     var zoom = HistorySelection.Zoom(domain, new TimeWindow(3600000 - liveWidth, 3600000), delta, 1);
                     liveWidth = zoom.To - zoom.From;
-                    var widths = new long[] { 600000, 1800000, 3600000 };
-                    for (int i = 0; i < livePresets.Count; i++) livePresets[i].IsChecked = liveWidth == widths[i];
                     Tick();
                 }
             };

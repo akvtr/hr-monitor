@@ -8,21 +8,6 @@ using System.Windows.Input;
 
 namespace HeartRateMonitor
 {
-    public sealed class DailyActivity
-    {
-        public DateTime Date;
-        public long Count;
-        // Convert each midnight separately so daylight-saving days need not be 24 hours.
-        public static long Midnight(DateTime date, TimeZoneInfo zone)
-        {
-            var local = DateTime.SpecifyKind(date.Date, DateTimeKind.Unspecified);
-            while (zone.IsInvalidTime(local)) local = local.AddMinutes(1);
-            if (zone.IsAmbiguousTime(local)) return new DateTimeOffset(local, zone.GetAmbiguousTimeOffsets(local).Max()).ToUnixTimeMilliseconds();
-            return new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(local, zone)).ToUnixTimeMilliseconds();
-        }
-        public static int Level(long count) => count <= 0 ? 0 : count < 600 ? 1 : count < 3600 ? 2 : count < 10800 ? 3 : 4;
-    }
-
     public sealed class ActivityCalendar : StackPanel
     {
         private readonly TextBlock summary;
@@ -69,13 +54,15 @@ namespace HeartRateMonitor
         }
         public void SetDays(IList<DailyActivity> activity)
         {
-            calendar.Children.Clear(); calendar.RowDefinitions.Clear(); calendar.ColumnDefinitions.Clear(); days.Clear();
-            if (activity.Count == 0) return;
+            if (activity == null) throw new ArgumentNullException(nameof(activity));
+            ClearDays();
+            calendar.RowDefinitions.Clear(); calendar.ColumnDefinitions.Clear();
             long total = activity.Sum(day => day.Count); int active = activity.Count(day => day.Count > 0);
-            summary.Text = Words.T($"過去365日 · {activity[0].Date:yyyy/MM/dd} — {activity[activity.Count - 1].Date:yyyy/MM/dd}", $"Past 365 days · {activity[0].Date:yyyy/MM/dd} — {activity[activity.Count - 1].Date:yyyy/MM/dd}");
             activeDays.Text = Words.T($"{active:N0} 日記録", $"{active:N0} active days"); sampleCount.Text = Words.T($"{total:N0} 件", $"{total:N0} samples");
             activeDays.ToolTip = Words.T("有効な心拍が記録された日数", "Days with valid heart-rate samples");
             sampleCount.ToolTip = Words.T("この期間に記録された有効な心拍の合計件数", "Total valid heart-rate samples in this period");
+            if (activity.Count == 0) { summary.Text = Words.T("カレンダーデータはありません", "No calendar data"); return; }
+            summary.Text = Words.T($"過去365日 · {activity[0].Date:yyyy/MM/dd} — {activity[activity.Count - 1].Date:yyyy/MM/dd}", $"Past 365 days · {activity[0].Date:yyyy/MM/dd} — {activity[activity.Count - 1].Date:yyyy/MM/dd}");
             var origin = activity[0].Date.AddDays(-(int)activity[0].Date.DayOfWeek);
             int weeks = ((activity[activity.Count - 1].Date - origin).Days / 7) + 1;
             calendar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) });
@@ -113,6 +100,10 @@ namespace HeartRateMonitor
                 Grid.SetColumn(button, column); Grid.SetRow(button, (int)day.Date.DayOfWeek + 1); calendar.Children.Add(button); days.Add(button);
             }
         }
-        public void SetError(string message) { summary.Text = Words.T("カレンダーの読込エラー: ", "Calendar read failed: ") + message; activeDays.Text = "—"; sampleCount.Text = "—"; calendar.Children.Clear(); }
+        private void ClearDays()
+        {
+            calendar.Children.Clear(); days.Clear();
+        }
+        public void SetError(string message) { summary.Text = Words.T("カレンダーの読込エラー: ", "Calendar read failed: ") + message; activeDays.Text = "—"; sampleCount.Text = "—"; ClearDays(); }
     }
 }

@@ -32,8 +32,11 @@ namespace HeartRateMonitor
         public static TimeWindow Move(TimeWindow domain, TimeWindow selection, long delta)
         {
             selection = Clamp(domain, selection);
-            long from = Math.Max(domain.From, Math.Min(domain.To - (selection.To - selection.From), selection.From + delta));
-            return new TimeWindow(from, from + selection.To - selection.From);
+            long width = selection.To - selection.From;
+            // Bound the shift before adding it so extreme deltas cannot wrap the timestamp.
+            long shift = Math.Max(domain.From - selection.From, Math.Min(domain.To - width - selection.From, delta));
+            long from = selection.From + shift;
+            return new TimeWindow(from, from + width);
         }
         public static TimeWindow Resize(TimeWindow domain, TimeWindow selection, bool left, long time)
         {
@@ -42,14 +45,20 @@ namespace HeartRateMonitor
             return left ? new TimeWindow(Math.Max(domain.From, Math.Min(selection.To - minimum, time)), selection.To)
                 : new TimeWindow(selection.From, Math.Min(domain.To, Math.Max(selection.From + minimum, time)));
         }
-        // A bounded preview derived exclusively from recorded bucket averages.
+        // A bounded preview derived exclusively from chronological recorded bucket averages.
         // Exact statistics are queried separately after interaction ends.
         public static List<ChartPoint> Preview(List<ChartPoint> source, TimeWindow range, int maximum = 400)
         {
+            if (source == null) throw new ArgumentNullException(nameof(source));
+            if (range == null) throw new ArgumentNullException(nameof(range));
             var result = new List<ChartPoint>();
-            long width = Math.Max(1000, (range.To - range.From + maximum - 1) / maximum), group = -1;
+            long width = ChartBuckets.Width(range.From, range.To, maximum), group = -1;
+            long? previous = null;
             ChartPoint aggregate = null; int count = 0;
             foreach (var point in source) {
+                if (point == null || (previous.HasValue && point.UnixMs < previous.Value))
+                    throw new ArgumentException("Preview requires non-null chart points in chronological order.", nameof(source));
+                previous = point.UnixMs;
                 if (point.UnixMs < range.From || point.UnixMs >= range.To) continue;
                 long next = (point.UnixMs - range.From) / width;
                 if (aggregate == null || next != group) {

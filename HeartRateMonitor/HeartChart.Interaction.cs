@@ -49,10 +49,18 @@ namespace HeartRateMonitor
             if (!selectionMoved && Math.Abs(point.X - dragOrigin.X) < SystemParameters.MinimumHorizontalDragDistance) return;
             selectionMoved = true;
             var range = HistorySelection.SelectedInterval(dragView, Fraction(dragOrigin.X), Fraction(point.X));
-            if (range == null) return;
-            if (SelectedRange != null && SelectedRange.From == range.From && SelectedRange.To == range.To) return;
+            if (range == null && SelectedRange == null) return;
+            if (range != null && SelectedRange != null && SelectedRange.From == range.From && SelectedRange.To == range.To) return;
+            SetSelectionRange(range);
+        }
+        private void SetSelectionRange(TimeWindow range)
+        {
             SelectedRange = range; SelectedSummary = null; selectionError = null; SelectionRevision++;
-            analysisDebounce.Stop(); analysisDebounce.Start(); InvalidateVisual();
+            analysisDebounce.Stop(); if (range != null) analysisDebounce.Start();
+            AutomationProperties.SetHelpText(this, range == null
+                ? Words.T("Ctrl＋ホイールで拡大・縮小。ドラッグで区間を選択。Esc・右クリックで選択解除。", "Ctrl+wheel to zoom. Drag to select an interval. Escape or right-click clears it.")
+                : SelectionText());
+            InvalidateVisual();
         }
         private void FinishSelection()
         {
@@ -67,10 +75,7 @@ namespace HeartRateMonitor
         }
         public void ClearSelection()
         {
-            selecting = false; ReleaseMouseCapture(); analysisDebounce.Stop();
-            SelectionRevision++; SelectedRange = null; SelectedSummary = null; selectionError = null;
-            AutomationProperties.SetHelpText(this, Words.T("Ctrl＋ホイールで拡大・縮小。ドラッグで区間を選択。Esc・右クリックで選択解除。", "Ctrl+wheel to zoom. Drag to select an interval. Escape or right-click clears it."));
-            InvalidateVisual();
+            selecting = false; ReleaseMouseCapture(); SetSelectionRange(null);
         }
         public void SetSelectionSummary(HistorySummary summary, string error = null)
         {

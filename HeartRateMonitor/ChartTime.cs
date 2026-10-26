@@ -6,19 +6,28 @@ namespace HeartRateMonitor
 {
     public static class ChartTime
     {
+        private const double MinimumTickSpacing = 95;
+        private static readonly long[] tickSteps = { 1000, 5000, 10000, 15000, 30000, 60000, 120000, 300000, 600000, 900000, 1800000, 3600000, 7200000, 10800000, 21600000 };
         public static List<long> Ticks(long from, long to, double pixels)
         {
             var ticks = new List<long> { from };
             if (to <= from) return ticks;
+            if (pixels < 2 * MinimumTickSpacing || double.IsNaN(pixels) || double.IsInfinity(pixels)) { ticks.Add(to); return ticks; }
             long span = to - from;
             double desired = span / Math.Max(2, Math.Min(8, pixels / 130));
-            long step = 21600000;
-            foreach (long candidate in new long[] { 1000, 5000, 10000, 15000, 30000, 60000, 120000, 300000, 600000, 900000, 1800000, 3600000, 7200000, 10800000, 21600000 })
+            long step = tickSteps[tickSteps.Length - 1];
+            foreach (long candidate in tickSteps)
                 if (candidate >= desired) { step = candidate; break; }
             long offset = (long)TimeZoneInfo.Local.GetUtcOffset(DateTimeOffset.FromUnixTimeMilliseconds(from)).TotalMilliseconds;
             long first = ((long)Math.Floor((from + offset) / (double)step) + 1) * step - offset;
-            for (long t = first; t < to; t += step) {
-                if ((t - ticks[ticks.Count - 1]) * pixels / span >= 95 && (to - t) * pixels / span >= 95) ticks.Add(t);
+            // Skip candidates that cannot fit, leaving a grid-step margin for rounding at the boundary.
+            long stride = Math.Max(1, (long)Math.Floor(MinimumTickSpacing * span / pixels / step) - 1);
+            for (long t = first + (stride - 1) * step; t < to;) {
+                if ((to - t) * pixels / span < MinimumTickSpacing) break;
+                if ((t - ticks[ticks.Count - 1]) * pixels / span >= MinimumTickSpacing) {
+                    ticks.Add(t);
+                    t += stride * step;
+                } else t += step;
             }
             ticks.Add(to); return ticks;
         }

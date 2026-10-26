@@ -18,6 +18,8 @@ Extract the ZIP and run `HeartRateMonitor.exe`; after a source build, run `artif
 
 The initial UI is Japanese. Choose **設定 → 表示言語 → English → 保存して適用** to switch.
 
+If automatic discovery fails, the app can still attempt a direct connection using a previously verified device identity. After disconnection, it keeps targeting the same sensor. Discovery permission denial or cancellation through Stop prevents this fallback; an unverified saved address never qualifies.
+
 ## Charts, history, and CSV
 
 Charts have no received-reading tables. Summaries and the dashed mean line use valid samples in the displayed period, excluding zero bpm and explicit lack of contact. Hover to inspect nearby samples or aggregated buckets.
@@ -28,7 +30,7 @@ Charts have no received-reading tables. Summaries and the dashed mean line use v
 - Drag horizontally in a main chart to analyze duration, mean, minimum, maximum, and count. Click, Escape, or right-click to clear; changing the visible range also clears it. Statistics use original valid samples, including the start and excluding the end.
 - **Recording rhythm** covers 365 local days including today. Shading represents valid sample count: 0, 1–599, 600–3,599, 3,600–10,799, or 10,800+. It does not measure wear duration or heart-rate intensity. Hover for counts; click a day, or Tab into the calendar and use arrows and Enter. Older retained data remains accessible through the overview.
 
-CSV exports **the finalized displayed range**, independently of analysis selection. It includes original readings, including zero bpm and no-contact samples, in timestamp order. Encoding is UTF-8 with BOM. Columns are `utc_time,local_time,bpm,contact,rr_ms,energy_kj,device,session`. The interval includes the start and excludes the end. Contact is `1`, `0`, or empty when unknown. There is no CSV import.
+CSV exports **the finalized displayed range**, independently of analysis selection. It includes original readings, including zero bpm and no-contact samples, in timestamp order. Encoding is UTF-8 with BOM. Columns are `utc_time,local_time,bpm,contact,rr_ms,energy_kj,device,session`. `local_time` uses the machine's current local time zone and the Gregorian format `yyyy-MM-dd HH:mm:ss.fff`, independently of OS calendar and display settings. The interval includes the start and excludes the end. Contact is `1`, `0`, or empty when unknown. There is no CSV import.
 
 ## Settings and OSC
 
@@ -60,11 +62,15 @@ The normal directory is `%LOCALAPPDATA%\HeartRateMonitor\`:
 
 - `heartrate.db`: UTC timestamps, original bpm, device/session, optional contact, RR intervals, and energy.
 - `settings.json`: preferences and previous verified device. `settings.json.bak` retains the previous file when replaced.
-- `connection.log`: up to 250 diagnostic lines from this launch. Copy logs before restarting; they may contain Japanese and Windows error text.
+- `connection.log`: up to 250 diagnostic lines from this launch, including connection, recording, and OSC errors and startup settings/retention failures. They may contain Japanese and Windows error text.
+
+Recording and OSC errors reach the log independently of UI updates, including during shutdown. If the log cannot be saved, the in-memory copy retains the notification and write failure. Copy needed logs before exiting; in-memory logs are lost at exit.
 
 Retention defaults to **Unlimited**, including migration from settings without a retention field. Settings offers **Unlimited, 1, 7, 30, 90, or 365 days**. The active policy appears on Live and History. Finite retention deletes readings older than the selected number of 24-hour days relative to the current time: at startup, after policy changes, and during checks every minute while running. Existing readings are included. **Deletion is irreversible: deleted readings cannot be recovered or exported. Returning to Unlimited does not restore them.** Export needed readings before shortening retention. Unlimited storage grows over time; monitor free space.
 
 Exit from the tray before backing up the entire data directory. To restore, exit, preserve the current folder separately, and replace it with the backup. The restored retention policy still applies at startup. There is no built-in backup/restore UI. SQLite uses WAL and FULL synchronization. Normal exit drains the queue; a crash or power loss can lose queued readings. Deletion does not guarantee immediate reduction of file size.
+
+Shutdown waits for accepted readings to be saved and for any CSV export in progress to finish. Large exports can therefore delay exit.
 
 ## Troubleshooting and limitations
 
@@ -82,6 +88,10 @@ The app uses WPF on .NET Framework 4.8, Windows WinRT BLE APIs, and OS-provided 
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -Test
 ```
 
+The compiler comes from the SDK selected by the `dotnet` on PATH when run in the repository. SDK locations are not hardcoded; prerelease names and `global.json` selection follow the .NET CLI.
+
+Windows SDK metadata selection compares installed versions numerically and uses the newest union metadata. Facade metadata is excluded, and the legacy layout directly under the UnionMetadata root is also supported.
+
 Development builds overwrite `artifacts/HeartRateMonitor.exe` and place the configuration, both READMEs, and ZIP directly under `artifacts/`. The ZIP includes the EXE, configuration, and both READMEs. Exit from the tray before replacing a running EXE.
 
 Generated files and verification output directly under `artifacts/` are development artifacts. Builds and verification do not finalize the product version or automatically create version directories. Reserve `artifacts/version-X.Y.Z/` for finalized snapshots only when explicitly instructed to finalize a version. The existing `version-0.0.0/` is for unversioned legacy artifacts.
@@ -93,7 +103,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\ui-smoke.ps1
 .\artifacts\HeartRateMonitor.exe --data-dir .\artifacts\verification\render --smoke-test
 ```
 
-The UI script seeds a temporary database labeled `ISOLATED UI TEST`. Rendering smoke mode checks Japanese/English and Light/Dark/System pages, captures PNGs, and writes `smoke-checks.txt`. It saves test settings: always use an isolated `--data-dir`. These are procedures, not a claim they were run during this documentation update.
+The UI script seeds a temporary database labeled `ISOLATED UI TEST`. Rendering smoke mode checks Japanese/English and Light/Dark/System pages, captures PNGs, and writes `smoke-checks.txt`. It saves test settings: always use an isolated `--data-dir`. Smoke mode rejects an omitted data directory or the normal profile directory. A missing `--data-dir` value, duplicate data-directory option, or unknown argument also causes a startup error. These are procedures, not a claim they were run during this documentation update.
+
+The dependency-free runner in `tests/Tests.cs` calls the domain suites in `tests/Tests.*.cs`. `build.ps1 -Test` compiles and runs them together; `BluetoothDiagnostic.cs` remains a separate hardware diagnostic.
+
+`build.ps1 -Test` also runs `tests/build-sdk.ps1`, which checks SDK discovery and failures using isolated SDK listings, and `tests/build-metadata.ps1`, which checks Windows SDK selection. When `-Diagnostic` is included, an abnormal hardware diagnostic exit also stops the build as a failure.
+
+The Bluetooth diagnostic attempts both device and heart-rate service enumeration, even if one query fails. An enumeration error or cancellation returns exit code 1; a successfully enumerated empty list is not a failure. Hardware-free regression tests also cover the query success and failure handling.
 
 Tests cover parsing, connection control, OSC and test isolation, settings, SQLite/CSV, retention, history, and analysis.
 

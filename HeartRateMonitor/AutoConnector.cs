@@ -25,20 +25,69 @@ namespace HeartRateMonitor
         public event Action<ConnectionUpdate> StateChanged;
         public bool Active => !running.IsCompleted;
         public AutoConnector(IHeartRateDiscovery transport, Func<TimeSpan, CancellationToken, Task> delay = null)
-        { this.transport = transport; this.delay = delay ?? ((span, token) => Task.Delay(span, token)); }
+        {
+            if (transport == null) throw new ArgumentNullException(nameof(transport));
+            this.transport = transport;
+            this.delay = delay ?? ((span, token) => Task.Delay(span, token));
+        }
 
         public static List<DeviceChoice> Candidates(IEnumerable<DeviceChoice> found, ulong preferred)
         {
             return found.Where(d => (d.Address != 0 || !string.IsNullOrEmpty(d.DeviceId) || !string.IsNullOrEmpty(d.ServiceId)) && d.HasHeartRateService)
-                .GroupBy(d => d.Address != 0 ? d.Address.ToString() : d.DeviceId ?? d.ServiceId).Select(g => g.First())
+                .GroupBy(CandidateIdentity).Select(g => g.First())
                 .OrderByDescending(d => preferred != 0 && d.Address == preferred)
                 .ThenBy(d => d.Address).ToList();
         }
+        private static string CandidateIdentity(DeviceChoice choice)
+        {
+            if (choice.Address != 0) return "address:" + choice.Address;
+            if (!string.IsNullOrEmpty(choice.DeviceId)) return "device:" + choice.DeviceId;
+            return "service:" + choice.ServiceId;
+        }
+        private static List<DeviceChoice> SelectCandidates(List<DeviceChoice> found, Settings config, DeviceChoice connected)
+        {
+            // Once connected, stay on that device until the user stops or chooses another.
+            if (connected != null) return new List<DeviceChoice> { connected };
+            var choices = Candidates(found, config.LastAddress);
+            if (!config.LastDeviceVerified || (config.LastAddress == 0 && string.IsNullOrEmpty(config.LastDeviceId))) return choices;
+
+            var saved = new DeviceChoice {
+                Address = config.LastAddress, Name = config.LastName, DeviceId = config.LastDeviceId,
+                AddressType = config.LastAddressType < 0 ? (Windows.Devices.Bluetooth.BluetoothAddressType?)null : (Windows.Devices.Bluetooth.BluetoothAddressType)config.LastAddressType,
+                HasHeartRateService = true
+            };
+            var previous = found.FirstOrDefault(d => d.Matches(saved)) ?? saved;
+            choices.RemoveAll(d => d.Matches(previous));
+            choices.Insert(0, previous);
+            return choices;
+        }
+        private async Task<List<DeviceChoice>> DiscoverCandidatesAsync(Func<Settings> settings, DeviceChoice connected, CancellationToken token)
+        {
+            List<DeviceChoice> found;
+            try { found = await transport.ScanAsync(token); }
+            catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
+            catch (UnauthorizedAccessException) { throw; }
+            catch (Exception ex) {
+                token.ThrowIfCancellationRequested();
+                var fallback = SelectCandidates(new List<DeviceChoice>(), settings(), connected);
+                if (fallback.Count == 0) throw;
+                Status?.Invoke(Words.T("検索失敗: ", "Discovery failed: ") + ex.Message +
+                    Words.T(" · 検証済み機器に直接接続します", " · Connecting directly to the verified sensor"));
+                return fallback;
+            }
+            token.ThrowIfCancellationRequested();
+            return SelectCandidates(found, settings(), connected);
+        }
         public void Start(Func<Settings> settings)
         {
+            if (settings == null) throw new ArgumentNullException(nameof(settings));
             if (Active) return;
             lifetime?.Dispose(); lifetime = new CancellationTokenSource();
-            running = RunAsync(settings, lifetime.Token);
+            // RunAsync can synchronously notify observers before its first await.
+            // Publish the current operation first so reentrant Start/Stop see it.
+            var startup = new TaskCompletionSource<Task>(TaskCreationOptions.RunContinuationsAsynchronously);
+            running = startup.Task.Unwrap();
+            startup.SetResult(RunAsync(settings, lifetime.Token));
         }
         public async Task StopAsync() { lifetime?.Cancel(); await running; }
         private async Task RunAsync(Func<Settings> settings, CancellationToken token)
@@ -51,22 +100,7 @@ namespace HeartRateMonitor
                     try {
                         Status?.Invoke(connected == null ? "心拍センサーを自動検索しています…" : connected.Name + " を再検出しています…");
                         StateChanged?.Invoke(new ConnectionUpdate { Phase = ConnectionPhase.Searching });
-                        var found = await transport.ScanAsync(token);
-                        token.ThrowIfCancellationRequested();
-                        var config = settings();
-                        var choices = Candidates(found, connected?.Address ?? config.LastAddress);
-                        // Once connected, stay on that device until the user stops or chooses another.
-                        if (connected != null) choices = new List<DeviceChoice> { connected };
-                        else if (config.LastDeviceVerified && (config.LastAddress != 0 || !string.IsNullOrEmpty(config.LastDeviceId))) {
-                            var previous = found.FirstOrDefault(d =>
-                                (config.LastAddress != 0 && d.Address == config.LastAddress) ||
-                                (!string.IsNullOrEmpty(config.LastDeviceId) && d.DeviceId == config.LastDeviceId))
-                                ?? new DeviceChoice { Address = config.LastAddress, Name = config.LastName, DeviceId = config.LastDeviceId, AddressType = config.LastAddressType < 0 ? (Windows.Devices.Bluetooth.BluetoothAddressType?)null : (Windows.Devices.Bluetooth.BluetoothAddressType)config.LastAddressType, HasHeartRateService = true };
-                            choices.RemoveAll(d => ReferenceEquals(d, previous) ||
-                                (previous.Address != 0 && d.Address == previous.Address) ||
-                                (!string.IsNullOrEmpty(previous.DeviceId) && d.DeviceId == previous.DeviceId));
-                            choices.Insert(0, previous);
-                        }
+                        var choices = await DiscoverCandidatesAsync(settings, connected, token);
                         Discovered?.Invoke(choices);
                         StateChanged?.Invoke(new ConnectionUpdate { Phase = choices.Count == 0 ? ConnectionPhase.Searching : ConnectionPhase.Detected, Problem = choices.Count == 0 ? ConnectionProblem.NotFound : ConnectionProblem.None });
                         if (choices.Count == 0) Status?.Invoke("センサーの電源を入れてください · 5秒後に再検索します");

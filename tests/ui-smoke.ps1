@@ -37,9 +37,13 @@ try {
     $windowHandle = [IntPtr]$window.Current.NativeWindowHandle
     function Find-Control([string]$automationId) {
         $condition = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::AutomationIdProperty, $automationId)
-        $element = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
+        $controlDeadline = [datetime]::UtcNow.AddSeconds(3)
+        do {
+            $element = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
+            if ($element) { return $element }
+            Start-Sleep -Milliseconds 50
+        } while ([datetime]::UtcNow -lt $controlDeadline)
         if (!$element) { throw "Control not found: $automationId" }
-        return $element
     }
     if (!$LayoutOnly) {
     $stop = Find-Control 'StopConnection'
@@ -211,7 +215,7 @@ try {
     $appProcess.Refresh()
     if ($appProcess.HasExited -or [WindowVisibility]::IsWindowVisible($windowHandle)) { throw 'Close did not hide the window to the tray.' }
     Write-Output 'PASS close keeps application resident in tray'
-    $second = Start-Process -FilePath $appPath -ArgumentList @('--data-dir', ('"' + $dataPath + '"')) -WindowStyle Hidden -PassThru
+    $second = Start-Process -FilePath $appPath -ArgumentList @('--data-dir', ('"' + $dataPath + '/"')) -WindowStyle Hidden -PassThru
     if (!$second.WaitForExit(5000) -or $second.ExitCode -ne 0) { throw 'Second launch did not signal the existing instance.' }
     Start-Sleep -Milliseconds 300
     $appProcess.Refresh()
@@ -231,8 +235,22 @@ try {
         if (!$trayChoice) { throw 'Close-to-tray setting was not found for test cleanup.' }
         $toggle = $trayChoice.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern)
         if ($toggle.Current.ToggleState -ne [System.Windows.Automation.ToggleState]::Off) { $toggle.Toggle() }
-        (Find-Control 'SaveSettings').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
-        [void][WindowVisibility]::PostMessage($windowHandle, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)
+        $save = Find-Control 'SaveSettings'
+        $previousSaveId = $save.GetRuntimeId() -join ':'
+        $save.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+        # Invoke can return before WPF runs the handler. Wait for the rebuilt form
+        # and persisted setting before closing, otherwise Close may still hide to tray.
+        $deadline = [datetime]::UtcNow.AddSeconds(8)
+        $saved = $false
+        do {
+            Start-Sleep -Milliseconds 50
+            $currentSaveId = (Find-Control 'SaveSettings').GetRuntimeId() -join ':'
+            $profile = Get-Content -Raw -Encoding UTF8 (Join-Path $dataPath 'settings.json') | ConvertFrom-Json
+            $saved = $currentSaveId -ne $previousSaveId -and !$profile.CloseToTray
+        } while (!$saved -and [datetime]::UtcNow -lt $deadline)
+        if (!$saved) { throw 'Close-to-tray change was not saved and applied before cleanup.' }
+        $windowHandle = [IntPtr]$window.Current.NativeWindowHandle
+        if (![WindowVisibility]::PostMessage($windowHandle, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)) { throw 'Could not request test window closure.' }
         if (!$appProcess.WaitForExit(8000)) { throw "Test process did not exit cleanly: $($appProcess.Id)" }
     }
 }

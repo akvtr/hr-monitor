@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text;
 
 namespace HeartRateMonitor
@@ -18,10 +17,20 @@ namespace HeartRateMonitor
             lock (gate) {
                 lines.Enqueue(DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff") + "  " + (message ?? "").Replace('\r', ' ').Replace('\n', ' '));
                 while (lines.Count > 250) lines.Dequeue();
-                try { File.WriteAllLines(Path, lines.ToArray(), new UTF8Encoding(true)); WriteError = null; }
+                try {
+                    AtomicFile.Write(Path, stream => {
+                        using (var writer = new StreamWriter(stream, new UTF8Encoding(true), 1024, true))
+                            foreach (string line in lines) writer.WriteLine(line);
+                    });
+                    WriteError = null;
+                }
                 catch (Exception ex) { WriteError = ex.Message; }
             }
         }
-        public string Snapshot() { lock (gate) return string.Join(Environment.NewLine, lines) + (WriteError == null ? "" : Environment.NewLine + "ログファイル保存失敗: " + WriteError); }
+        public string Snapshot()
+        {
+            lock (gate) return string.Join(Environment.NewLine, lines) + (WriteError == null ? "" :
+                Environment.NewLine + Words.T("ログファイル保存失敗: ", "Could not save log file: ") + WriteError);
+        }
     }
 }

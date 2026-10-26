@@ -57,26 +57,8 @@ namespace HeartRateMonitor
             FontFamily = new FontFamily("Segoe UI, Yu Gothic UI"); FontSize = 14;
             BuildUi();
             engine = new RecordingEngine(database, settings);
-            bluetooth.Status += value => connectionLog.Add(value);
-            bluetooth.Diagnostic += value => connectionLog.Add(value);
-            automatic.Status += value => connectionLog.Add(value);
-            bluetooth.StateChanged += value => Ui(() => SetState(value));
-            automatic.StateChanged += value => Ui(() => SetState(value));
-            automatic.Discovered += found => Ui(() => UpdateDevices(found));
-            bluetooth.Connected += choice => Ui(() => {
-                deviceTitle.Text = choice.Name;
-                settings.LastAddress = choice.Address; settings.LastName = choice.Name;
-                settings.LastDeviceVerified = true; settings.LastDeviceId = choice.DeviceId;
-                settings.LastAddressType = choice.AddressType.HasValue ? (int)choice.AddressType.Value : -1;
-                try { settings.Save(settingsPath); } catch (Exception ex) { errorText.Text = ex.Message; }
-            });
-            bluetooth.Received += engine.Accept;
-            engine.Error += message => Ui(() => errorText.Text = T("記録エラー: ", "Recording error: ") + message);
-            if (engine.StartupRetentionError != null) errorText.Text = T("古い記録の削除に失敗しました: ", "Could not delete expired recordings: ") + engine.StartupRetentionError;
-            engine.RetentionChanged += () => Ui(() => { if (tabs.SelectedIndex == 1) _ = RefreshHistory(false); });
-            engine.OscFailed += message => Ui(() => { oscFailure = message; UpdateOsc(); });
-            engine.Transmitted += value => Ui(() => { transmission = value; oscFailure = null; UpdateOsc(); });
-            engine.Processed += (row, saved, osc) => Ui(() => Received(row, saved, osc));
+            BindConnectionEvents();
+            BindRecordingEvents();
             timer.Tick += (s, e) => Tick(); timer.Start();
             Closing += OnClosing;
             SourceInitialized += (s, e) => ApplyTheme();
@@ -85,20 +67,30 @@ namespace HeartRateMonitor
                 tray = new TrayHost(() => Ui(RestoreWindow), () => Ui(StartAutomatic), () => Ui(() => StopClicked(null, null)), () => Ui(ExitApplication));
                 if (!smokeTest && settings.AutoConnect) StartAutomatic();
             };
-            if (warning != null) errorText.Text = warning;
+            if (warning != null) { connectionLog.Add(warning); errorText.Text = warning; }
             Tick();
         }
-        private void Ui(Action action) { if (!Dispatcher.HasShutdownStarted) Dispatcher.BeginInvoke(new Action(() => { if (!canClose) action(); })); }
-        public void RestoreWindow() { Show(); WindowState = WindowState.Normal; Activate(); }
+        private void Ui(Action action) { if (!Dispatcher.HasShutdownStarted) Dispatcher.BeginInvoke(new Action(() => { if (!closing) action(); })); }
+        public void RestoreWindow()
+        {
+            // A second-instance notification can already be queued when shutdown starts.
+            if (closing) return;
+            Show(); WindowState = WindowState.Normal; Activate();
+        }
         public void ExitApplication() { exitRequested = true; Close(); }
-        public void EndSession()
+        private void BeginShutdown()
         {
             closing = true; closingToken.Cancel(); scanCancellation?.Cancel(); timer.Stop(); historyDebounce.Stop();
+            SystemEvents.UserPreferenceChanged -= SystemThemeChanged;
+        }
+        public void EndSession()
+        {
+            BeginShutdown();
             bluetooth.Received -= engine.Accept;
             // Discovery continuations may need the UI dispatcher. Do not synchronously
-            // wait for them during Windows session shutdown; only drain the independent writer.
+            // wait for them during Windows session shutdown; only wait for independent disk work.
             _ = automatic.StopAsync(); _ = bluetooth.StopAsync();
-            try { Task.Run(() => engine.StopAsync()).GetAwaiter().GetResult(); }
+            try { Task.Run(() => Task.WhenAll(engine.StopAsync(), historyExport)).GetAwaiter().GetResult(); }
             catch (Exception ex) { connectionLog.Add("Session ending: " + ex.Message); }
             tray?.Dispose(); canClose = true;
         }
@@ -137,9 +129,9 @@ namespace HeartRateMonitor
         private async void RetryClicked(object sender, RoutedEventArgs e) { await StopConnection(); StartAutomatic(); }
         private void UpdateDevices(List<DeviceChoice> found)
         {
-            string selected = (devices.SelectedItem as DeviceChoice)?.DeviceId ?? settings.LastDeviceId;
+            var selected = devices.SelectedItem as DeviceChoice ?? new DeviceChoice { Address = settings.LastAddress, DeviceId = settings.LastDeviceId };
             devices.Items.Clear(); foreach (var device in found) devices.Items.Add(device);
-            devices.SelectedItem = found.FirstOrDefault(d => d.DeviceId == selected) ?? found.FirstOrDefault(); Tick();
+            devices.SelectedItem = found.FirstOrDefault(d => d.Matches(selected)) ?? found.FirstOrDefault(); Tick();
         }
         private async void ScanClicked(object sender, RoutedEventArgs e) { manualSearch = SearchManually(); await manualSearch; }
         private async Task SearchManually()
@@ -164,7 +156,11 @@ namespace HeartRateMonitor
         {
             if (stopping || closing) return;
             stopping = true; Tick();
-            try { scanCancellation?.Cancel(); await automatic.StopAsync(); await bluetooth.StopAsync(); await manualSearch; latest = null; }
+            try {
+                scanCancellation?.Cancel();
+                await Task.WhenAll(automatic.StopAsync(), bluetooth.StopAsync(), manualSearch);
+                latest = null;
+            }
             catch (Exception ex) { errorText.Text = ex.Message; }
             finally { stopping = false; state = new ConnectionUpdate(); RenderConnection(); Tick(); }
         }
@@ -180,8 +176,7 @@ namespace HeartRateMonitor
         {
             if (!closing && tabs.SelectedIndex == 1 && DateTime.UtcNow >= activityRefreshAt) _ = RefreshActivity();
             liveSpanPicker?.Update(liveWidth, 3600000);
-            var presetWidths = new long[] { 600000, 1800000, 3600000 };
-            for (int i = 0; i < livePresets.Count; i++) livePresets[i].IsChecked = liveWidth == presetWidths[i];
+            for (int i = 0; i < livePresets.Count; i++) livePresets[i].IsChecked = liveWidth == livePresetWidths[i];
             long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             livePoints.RemoveAll(p => p.UnixMs < now - 3600000);
             var visible = livePoints.Where(p => p.UnixMs >= now - liveWidth).ToList();
@@ -225,11 +220,18 @@ namespace HeartRateMonitor
             e.Cancel = true;
             if (!exitRequested && !smokeTest && settings.CloseToTray && tray != null) { Hide(); tray.ExplainHidden(); return; }
             if (closing) return;
-            closing = true; closingToken.Cancel(); scanCancellation?.Cancel(); timer.Stop(); historyDebounce.Stop(); IsEnabled = false;
-            SystemEvents.UserPreferenceChanged -= SystemThemeChanged;
-            try { await automatic.StopAsync(); await bluetooth.StopAsync(); await manualSearch; await engine.StopAsync(); }
-            catch (Exception ex) { connectionLog.Add("Shutdown: " + ex); }
-            tray?.Dispose(); canClose = true; Close();
+            BeginShutdown(); IsEnabled = false;
+            try { await Task.WhenAll(automatic.StopAsync(), bluetooth.StopAsync(), manualSearch); }
+            catch (Exception ex) { connectionLog.Add("Connection shutdown: " + ex); }
+            try { await historyExport; }
+            catch (Exception ex) { connectionLog.Add("CSV shutdown: " + ex); }
+            // Drain accepted readings even when a connection or discovery task failed to stop.
+            try { await engine.StopAsync(); }
+            catch (Exception ex) { connectionLog.Add("Recording shutdown: " + ex); }
+            tray?.Dispose(); canClose = true;
+            // Stop tasks can complete synchronously inside the original Closing event.
+            // Let its cancellation finish before requesting the final close.
+            _ = Dispatcher.BeginInvoke(new Action(Close));
         }
     }
 }

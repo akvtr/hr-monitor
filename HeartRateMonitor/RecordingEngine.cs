@@ -1,20 +1,10 @@
 using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace HeartRateMonitor
 {
-    public sealed class OscTransmission
-    {
-        public DateTime Time = DateTime.Now;
-        public string Endpoint, IntAddress, FloatAddress;
-        public int Integer;
-        public float Percent;
-        public bool Test;
-        public bool Timeout;
-    }
     public sealed class RecordingEngine
     {
         private enum WorkKind { Reading, OscTest, Retention, Configure }
@@ -28,8 +18,10 @@ namespace HeartRateMonitor
         }
         private readonly BlockingCollection<Work> queue = new BlockingCollection<Work>(4096);
         private readonly Task worker;
+        private readonly object stopGate = new object();
+        private Task stopping;
         private volatile Settings settings;
-        private long lastReception = Stopwatch.GetTimestamp();
+        private readonly ReceptionTimer receptionTimer = new ReceptionTimer();
         private bool timeoutSent;
         private Settings timeoutConfiguration;
         public event Action<Reading, string, string> Processed;
@@ -43,7 +35,9 @@ namespace HeartRateMonitor
         internal RecordingEngine(string database, Settings initial, TimeSpan retentionInterval)
         {
             if (retentionInterval <= TimeSpan.Zero || retentionInterval > TimeSpan.FromMinutes(1)) throw new ArgumentOutOfRangeException(nameof(retentionInterval));
+            if (initial == null) throw new ArgumentNullException(nameof(initial));
             settings = initial.Copy();
+            settings.Validate();
             var store = new Store(database);
             var retentionClock = Stopwatch.StartNew();
             try { DeleteExpired(store); }
@@ -91,7 +85,7 @@ namespace HeartRateMonitor
                 timeoutSent = false;
                 work.Completion.SetResult(true);
             } catch (Exception ex) {
-                OscFailed?.Invoke(ex.Message);
+                NotifyObservers(OscFailed, handler => handler(ex.Message));
                 work.Completion.SetException(ex);
             }
         }
@@ -100,12 +94,12 @@ namespace HeartRateMonitor
             timeoutSent = false;
             string storage = SaveReading(store, reading);
             string sending = SendReading(osc, reading);
-            Processed?.Invoke(reading, storage, sending);
+            NotifyObservers(Processed, handler => handler(reading, storage, sending));
         }
         private string SaveReading(Store store, Reading reading)
         {
             try { store.Add(reading); return "saved"; }
-            catch (Exception ex) { Error?.Invoke(ex.Message); return ex.Message; }
+            catch (Exception ex) { NotifyObservers(Error, handler => handler(ex.Message), reportErrors: false); return ex.Message; }
         }
         private string SendReading(OscSender osc, Reading reading)
         {
@@ -115,12 +109,12 @@ namespace HeartRateMonitor
                 if (reading.Bpm <= 0 || reading.Contact == false) return "waiting";
                 Send(osc, current, reading.Bpm, false);
                 return "sent";
-            } catch (Exception ex) { OscFailed?.Invoke(ex.Message); return "error"; }
+            } catch (Exception ex) { NotifyObservers(OscFailed, handler => handler(ex.Message)); return "error"; }
         }
         private void PruneExpired(Store store)
         {
-            try { if (DeleteExpired(store) > 0) RetentionChanged?.Invoke(); }
-            catch (Exception ex) { Error?.Invoke(Words.T("古い記録の削除に失敗しました: ", "Could not delete expired recordings: ") + ex.Message); }
+            try { if (DeleteExpired(store) > 0) NotifyObservers(RetentionChanged, handler => handler()); }
+            catch (Exception ex) { NotifyObservers(Error, handler => handler(Words.T("古い記録の削除に失敗しました: ", "Could not delete expired recordings: ") + ex.Message), reportErrors: false); }
         }
         private int DeleteExpired(Store store)
         {
@@ -137,19 +131,30 @@ namespace HeartRateMonitor
                 timeoutSent = false;
             timeoutConfiguration = current;
             if (!current.OscEnabled || !current.OscZeroOnTimeout || timeoutSent || queue.Count > 0) return;
-            double elapsed = (Stopwatch.GetTimestamp() - Interlocked.Read(ref lastReception)) / (double)Stopwatch.Frequency;
-            if (elapsed < current.OscTimeoutSeconds) return;
+            if (receptionTimer.ElapsedSeconds < current.OscTimeoutSeconds) return;
             // One attempt per silent period; a new reading or relevant configuration change rearms it.
             timeoutSent = true;
             try { Send(osc, current, 0, false, true); }
-            catch (Exception ex) { OscFailed?.Invoke(ex.Message); }
+            catch (Exception ex) { NotifyObservers(OscFailed, handler => handler(ex.Message)); }
         }
         private void Send(OscSender sender, Settings config, int bpm, bool test, bool timeout = false)
         {
             if (!config.OscEnabled) throw new InvalidOperationException(Words.T("設定でOSC送信を有効にして保存してください。", "Enable OSC in Settings and save first."));
             var values = new OscValues(config, bpm);
             sender.Send(config, values);
-            Transmitted?.Invoke(new OscTransmission { Endpoint = config.Host + ":" + config.Port, IntAddress = values.IntAddress, FloatAddress = values.FloatAddress, Integer = values.Integer, Percent = values.Percent, Test = test, Timeout = timeout });
+            var transmission = new OscTransmission { Endpoint = config.Host + ":" + config.Port, IntAddress = values.IntAddress, FloatAddress = values.FloatAddress, Integer = values.Integer, Percent = values.Percent, Test = test, Timeout = timeout };
+            NotifyObservers(Transmitted, handler => handler(transmission));
+        }
+        private void NotifyObservers<THandler>(THandler observers, Action<THandler> notify, bool reportErrors = true) where THandler : Delegate
+        {
+            if (observers == null) return;
+            foreach (THandler observer in observers.GetInvocationList()) {
+                try { notify(observer); }
+                catch (Exception ex) {
+                    // Error observers are isolated too; do not recursively report their failures.
+                    if (reportErrors) NotifyObservers(Error, handler => handler(Words.T("通知処理に失敗しました: ", "Notification handler failed: ") + ex.Message), reportErrors: false);
+                }
+            }
         }
         public Task TestAsync(int bpm)
         {
@@ -161,24 +166,37 @@ namespace HeartRateMonitor
         }
         public void Configure(Settings value)
         {
-            value.Validate();
-            bool retentionChanged = settings.RetentionDays != value.RetentionDays;
-            settings = value.Copy();
-            try { queue.TryAdd(new Work { Kind = WorkKind.Configure }); }
+            if (value == null) throw new ArgumentNullException(nameof(value));
+            var next = value.Copy();
+            next.Validate();
+            bool retentionChanged = settings.RetentionDays != next.RetentionDays;
+            settings = next;
+            // Both work kinds wake the writer. A policy change also prunes expired readings.
+            // If the queue is full, its regular deadline still applies within one minute.
+            try { queue.TryAdd(new Work { Kind = retentionChanged ? WorkKind.Retention : WorkKind.Configure }); }
             catch (InvalidOperationException) { }
-            if (retentionChanged) {
-                // Wake the writer to apply the latest policy, including while receiving no data.
-                // If the queue is full, its regular deadline still applies within one minute.
-                try { queue.TryAdd(new Work { Kind = WorkKind.Retention }); }
-                catch (InvalidOperationException) { }
-            }
         }
         public void Accept(Reading reading)
         {
-            Interlocked.Exchange(ref lastReception, Stopwatch.GetTimestamp());
-            try { if (!queue.TryAdd(new Work { Kind = WorkKind.Reading, Reading = reading })) Error?.Invoke(Words.T("保存キューが満杯です。この通知は保存できませんでした。", "The recording queue is full. This notification was not saved.")); }
+            if (reading == null) throw new ArgumentNullException(nameof(reading));
+            receptionTimer.Reset();
+            try { if (!queue.TryAdd(new Work { Kind = WorkKind.Reading, Reading = reading.Copy() })) NotifyObservers(Error, handler => handler(Words.T("保存キューが満杯です。この通知は保存できませんでした。", "The recording queue is full. This notification was not saved.")), reportErrors: false); }
             catch (InvalidOperationException) { }
         }
-        public async Task StopAsync() { queue.CompleteAdding(); await worker; queue.Dispose(); }
+        public Task StopAsync()
+        {
+            lock (stopGate) {
+                if (stopping == null) {
+                    queue.CompleteAdding();
+                    stopping = DrainAsync();
+                }
+                return stopping;
+            }
+        }
+        private async Task DrainAsync()
+        {
+            try { await worker.ConfigureAwait(false); }
+            finally { queue.Dispose(); }
+        }
     }
 }

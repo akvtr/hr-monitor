@@ -8,8 +8,17 @@ namespace HeartRateMonitor
 {
     public static class GattAccess
     {
+        internal static void EnsureCommunication(GattCommunicationStatus status, string detail)
+        {
+            if (status == GattCommunicationStatus.Success) return;
+            if (status == GattCommunicationStatus.AccessDenied)
+                throw new UnauthorizedAccessException(detail + Words.T("。Windowsのデバイス利用許可と、他の心拍アプリの接続を確認してください。", ". Check device access permissions in Windows and connections from other heart-rate apps."));
+            throw new InvalidOperationException(detail);
+        }
         public static async Task EnsureAsync(Func<Task<DeviceAccessStatus>> request, Func<Task<GattOpenStatus>> open, Action<string> log, CancellationToken token)
         {
+            if (request == null) throw new ArgumentNullException(nameof(request));
+            if (open == null) throw new ArgumentNullException(nameof(open));
             token.ThrowIfCancellationRequested();
             var access = await request();
             log?.Invoke("心拍サービスのアクセス要求: " + access);
