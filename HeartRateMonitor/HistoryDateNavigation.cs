@@ -21,7 +21,9 @@ namespace HeartRateMonitor
             // Repeated local times consistently select the earlier occurrence.
             try {
                 long from = zone.IsAmbiguousTime(local) ? new DateTimeOffset(local, zone.GetAmbiguousTimeOffsets(local).Max()).ToUnixTimeMilliseconds()
-                    : new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(local, zone)).ToUnixTimeMilliseconds();
+                    // ConvertTimeToUtc silently clamps at DateTime's limits; explicit offsets reject
+                    // unrepresentable UTC values rather than navigating to a different local time.
+                    : new DateTimeOffset(local, zone.GetUtcOffset(local)).ToUnixTimeMilliseconds();
                 long to = checked(from + Math.Max(60000, width));
                 DateTimeOffset.FromUnixTimeMilliseconds(to).ToLocalTime();
                 if (local.Year == 9999 && local.Month == 12) throw new ArgumentOutOfRangeException();

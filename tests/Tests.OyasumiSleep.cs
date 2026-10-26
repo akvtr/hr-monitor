@@ -46,6 +46,8 @@ internal static partial class Tests
             Check(store.SleepIntervals(0, 50000).Count == 6, "restarting tracking never extends a previous run across unobserved time");
             Check(store.Query(0, 50000).Single().Bpm == 70, "sleep observations neither fabricate nor change heart-rate readings");
             Check(store.SleepIntervals(5000, 8000).Count == 0 && store.SleepIntervals(4999, 5001).Count == 1, "sleep labels use half-open overlap boundaries");
+            Check(store.SleepIntervals(2000, 2000).Count == 0, "empty sleep query ranges contain no intervals");
+            Check(store.SleepIntervals(3000, 2000).Count == 0, "reversed sleep query ranges contain no intervals");
             ExecuteIsolatedSql(database, "CREATE TRIGGER reject_sleep_prune BEFORE DELETE ON readings BEGIN SELECT RAISE(ABORT,'ISOLATED failure'); END;");
             Throws<IOException>(() => store.DeleteBefore(10000), "sleep retention reports reading deletion failures");
             Check(store.SleepIntervals(0, 50000).Count == 6, "sleep retention rolls back label deletion when reading deletion fails");
@@ -105,6 +107,37 @@ internal static partial class Tests
             var elapsed = System.Diagnostics.Stopwatch.StartNew();
             Throws<OperationCanceledException>(() => new OyasumiOscQuery().Read(slow.Port, cancel.Token), "in-flight OSCQuery reads are canceled during shutdown or reconfiguration");
             Check(elapsed.ElapsedMilliseconds < 1500, "canceling an active sleep request promptly interrupts blocking reads");
+        }
+    }
+
+    private static void TestOyasumiDiscoveryCancellation(string folder)
+    {
+        foreach (string action in new[] { "stop", "disable", "active" }) {
+            using (var entered = new ManualResetEventSlim())
+            using (var release = new ManualResetEventSlim()) {
+                string database = Path.Combine(folder, "oyasumi-discovery-" + action + ".db");
+                var settings = new Settings { OyasumiEnabled = true };
+                int errors = 0;
+                var monitor = new OyasumiSleepMonitor(database, settings, () => {
+                    entered.Set();
+                    if (!release.Wait(3000)) throw new TimeoutException("ISOLATED discovery was not released");
+                    throw new System.ComponentModel.Win32Exception(5, "ISOLATED listener discovery failure");
+                }, interval: TimeSpan.FromMilliseconds(10));
+                monitor.StatusChanged += status => { if (status.State == "Error") Interlocked.Increment(ref errors); };
+                try {
+                    monitor.Start();
+                    Check(entered.Wait(3000), "Oyasumi discovery is pending before " + action);
+                    Task stopped = null;
+                    if (action == "stop") stopped = monitor.StopAsync();
+                    if (action == "disable") { settings.OyasumiEnabled = false; monitor.Configure(settings); }
+                    release.Set();
+                    if (stopped != null) Check(stopped.Wait(3000), "Oyasumi shutdown drains the failed discovery");
+                    else WaitUntil(() => action == "disable" ? monitor.Status.State == "Disabled" : Volatile.Read(ref errors) > 0);
+                    Check(action == "active" ? Volatile.Read(ref errors) > 0 : Volatile.Read(ref errors) == 0,
+                        "Oyasumi reports discovery errors only for the current enabled operation after " + action);
+                    Check(!File.Exists(database), "failed Oyasumi discovery creates no observations after " + action);
+                } finally { release.Set(); Check(monitor.StopAsync().Wait(3000), "Oyasumi discovery regression worker exits after " + action); }
+            }
         }
     }
 

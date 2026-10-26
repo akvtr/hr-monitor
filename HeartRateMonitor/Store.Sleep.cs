@@ -43,9 +43,9 @@ namespace HeartRateMonitor
         {
             lock (gate) {
                 var result = new List<SleepInterval>();
-                var s = Prepare("SELECT id,from_ms,to_ms FROM sleep_intervals WHERE from_ms<? AND to_ms>? AND to_ms>from_ms ORDER BY from_ms,id;");
+                var s = Prepare("SELECT id,from_ms,to_ms FROM sleep_intervals WHERE from_ms<? AND to_ms>? AND to_ms>from_ms AND ?<? ORDER BY from_ms,id;");
                 try {
-                    BindInt(s, 1, to); BindInt(s, 2, from); int rc;
+                    BindInt(s, 1, to); BindInt(s, 2, from); BindInt(s, 3, from); BindInt(s, 4, to); int rc;
                     while ((rc = Native.sqlite3_step(s)) == Native.Row)
                         result.Add(new SleepInterval { Id = Native.sqlite3_column_int64(s, 0), From = Native.sqlite3_column_int64(s, 1), To = Native.sqlite3_column_int64(s, 2) });
                     if (rc != Native.Done) Check(rc); return result;

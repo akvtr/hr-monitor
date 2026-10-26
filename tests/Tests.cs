@@ -35,6 +35,7 @@ internal static partial class Tests
         try {
             TestAutoConnection();
             TestAutomaticConnectionReentrancy();
+            TestAutomaticConnectionCancellationFailures();
             TestBluetoothConnectionReentrancy();
             TestBluetoothRetryClassification();
             TestDeviceSelectionIdentity(folder);
@@ -98,6 +99,7 @@ internal static partial class Tests
             TestStoreTextRoundTrip(folder);
             TestStoreTextValidation(folder);
             TestOyasumiSleep(folder);
+            TestOyasumiDiscoveryCancellation(folder);
             TestRetentionBoundary(folder);
             TestStartupRetention(folder);
             TestIdleRetention(folder);

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -403,6 +404,39 @@ internal static partial class Tests
             Check(stop.Wait(3000) && !auto.Active && fake.ConnectedSubscribers == 0,
                 "reentrant stop completes only after the current discovery loop releases its subscription");
         } finally { scan.TrySetResult(new List<DeviceChoice>()); Stop(auto); }
+    }
+
+    private static void TestAutomaticConnectionCancellationFailures()
+    {
+        foreach (bool duringConnection in new[] { false, true })
+        foreach (Exception failure in new Exception[] { new UnauthorizedAccessException("ISOLATED late permission result"), new IOException("ISOLATED late transport failure") }) {
+            var scan = new TaskCompletionSource<List<DeviceChoice>>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var connection = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var device = new DeviceChoice { Address = 1, HasHeartRateService = true, Name = "ISOLATED CANCELLATION TEST" };
+            var fake = new FakeDiscovery {
+                Search = (number, token) => duringConnection ? Task.FromResult(new List<DeviceChoice> { device }) : scan.Task,
+                Connect = (choice, number, token) => connection.Task
+            };
+            var auto = new AutoConnector(fake);
+            bool stopping = false;
+            int lateNotifications = 0;
+            auto.Status += message => { if (stopping) Interlocked.Increment(ref lateNotifications); };
+            auto.StateChanged += state => { if (stopping) Interlocked.Increment(ref lateNotifications); };
+            try {
+                auto.Start(() => new Settings());
+                Check(duringConnection ? fake.ConnectCalls == 1 : fake.ScanCalls == 1,
+                    "cancellation regression reaches the pending " + (duringConnection ? "connection" : "discovery") + " before " + failure.GetType().Name);
+                stopping = true;
+                Task stop = auto.StopAsync();
+                if (duringConnection) connection.SetException(failure); else scan.SetException(failure);
+                Check(stop.Wait(3000) && !auto.Active && fake.ConnectedSubscribers == 0,
+                    "stop drains a late " + failure.GetType().Name + " from " + (duringConnection ? "connection" : "discovery"));
+                Check(lateNotifications == 0,
+                    "canceled " + (duringConnection ? "connection" : "discovery") + " does not publish a late " + failure.GetType().Name + " as an active failure");
+            } finally {
+                scan.TrySetResult(new List<DeviceChoice>()); connection.TrySetResult(true); Stop(auto);
+            }
+        }
     }
 
     private sealed class FakeDiscovery : IHeartRateDiscovery

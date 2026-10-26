@@ -87,7 +87,13 @@ namespace HeartRateMonitor
                             }
                         }
                     } catch (OperationCanceledException) { tracker = null; }
-                    catch (Exception ex) { tracker = null; cachedPort = 0; Publish("Error", ex.Message); }
+                    catch (Exception ex) {
+                        tracker = null; cachedPort = 0;
+                        lock (gate) {
+                            // Discovery is synchronous and may fail after its request was canceled.
+                            if (currentRevision == revision && !stopping.IsCancellationRequested) Publish("Error", ex.Message);
+                        }
+                    }
                     finally {
                         lock (gate) { request.Dispose(); request = null; }
                     }

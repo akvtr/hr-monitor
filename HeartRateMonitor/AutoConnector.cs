@@ -110,7 +110,7 @@ namespace HeartRateMonitor
                             try { await transport.ConnectOnceAsync(choice, token); }
                             catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
                             catch (UnauthorizedAccessException) { throw; }
-                            catch (Exception ex) { Status?.Invoke(choice.Name + ": " + ex.Message); }
+                            catch (Exception ex) { token.ThrowIfCancellationRequested(); Status?.Invoke(choice.Name + ": " + ex.Message); }
                             token.ThrowIfCancellationRequested();
                             if (connected != null) {
                                 if (!settings().AutoReconnect) { Status?.Invoke("接続が終了しました · 自動再接続はオフです"); return; }
@@ -119,7 +119,9 @@ namespace HeartRateMonitor
                                 break;
                             }
                         }
-                    } catch (OperationCanceledException) when (token.IsCancellationRequested) { break; }
+                    // Windows can finish an outstanding operation with a transport/permission
+                    // error after cancellation. That result belongs to the stopped operation.
+                    } catch (Exception) when (token.IsCancellationRequested) { break; }
                     catch (UnauthorizedAccessException ex) { Status?.Invoke("自動接続を停止 · " + ex.Message); StateChanged?.Invoke(new ConnectionUpdate { Phase = ConnectionPhase.Error, Problem = ConnectionUpdate.Classify(ex), Detail = ex.Message }); return; }
                     catch (Exception ex) { Status?.Invoke("自動接続: " + ex.Message + " · 再試行します"); StateChanged?.Invoke(new ConnectionUpdate { Phase = ConnectionPhase.Retrying, Problem = ConnectionUpdate.Classify(ex), Detail = ex.Message }); }
                     await delay(TimeSpan.FromSeconds(5), token);

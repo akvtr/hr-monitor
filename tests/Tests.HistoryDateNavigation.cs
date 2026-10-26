@@ -19,6 +19,12 @@ internal static partial class Tests
             Check(!HistoryDateNavigation.TryWindow(pair[0], pair[1], 600000, zone, out range, out error) && range == null && error.Length > 0,
                 "date jump rejects invalid or ambiguous input " + pair[0] + " " + pair[1]);
         Check(!HistoryDateNavigation.TryWindow("9999/12/31", "23:59", 86400000, zone, out range, out error), "date jump reports overflowing date windows");
+        Check(!HistoryDateNavigation.TryWindow("0001/01/01", "00:00", 600000, zone, out range, out error)
+            && range == null && error.Length > 0, "date jump rejects local times whose UTC value precedes the supported range instead of silently clamping them");
+        Check(HistoryDateNavigation.TryWindow("0001/01/01", "09:00", 600000, zone, out range, out error)
+            && range.From == DateTimeOffset.MinValue.ToUnixTimeMilliseconds(), "date jump accepts the exact minimum UTC boundary in a positive-offset zone");
+        Check(HistoryDateNavigation.TryWindow("0001/01/01", "00:00", 600000, TimeZoneInfo.Utc, out range, out error)
+            && range.From == DateTimeOffset.MinValue.ToUnixTimeMilliseconds(), "date jump preserves the supported minimum date in UTC");
         var pacific = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
         Check(!HistoryDateNavigation.TryWindow("2024/03/10", "02:30", 600000, pacific, out range, out error), "date jump rejects nonexistent daylight-saving time");
         Check(HistoryDateNavigation.TryWindow("2024/11/03", "01:30", 600000, pacific, out range, out error)
