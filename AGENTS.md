@@ -1,113 +1,113 @@
 # AGENTS.md
 
-このファイルは、このリポジトリ全体で作業するエージェント向けの指針です。
+These instructions apply to the entire repository. Keep this file in English.
 
-## 作業の進め方
+## Working Process
 
-- 変更前に関連する実装・テスト・ドキュメントと `git status` を確認する。既存のユーザー変更を上書きせず、コミットには今回の変更だけを含める。
-- 一つの論理的な修正・機能追加ごとに、実装・関連テスト・ドキュメント更新・検証を完了し、ローカルコミットしてから無関係な作業へ進む。複数の変更を最後にまとめてコミットしない。
-- ユーザー向けの仕様・操作を変更する場合は、日本語の `README.md` と英語の `README.en.md` を同時に更新する。
-- 実装・ビルド・テストの完了やローカルコミットは、push・バージョン確定・リリース作成の許可を意味しない。それぞれユーザーの指示に従う。
+- Before editing, inspect the relevant implementation, tests, documentation, and `git status`. Preserve existing user changes and include only your own changes in each commit.
+- Complete and verify each independent change, then commit it before starting unrelated work. Keep one fix, addition, or removal per commit, together with its supporting tests and documentation. Do not combine independent changes just because they share a commit type.
+- Update Japanese `README.md` and English `README.en.md` together when changing user-facing behavior or instructions.
+- Implementation, builds, tests, and local commits do not authorize pushing, version finalization, or release creation. Follow the user's instructions for each delivery step.
 
-## 構成と責務
+## Project Structure and Responsibilities
 
-- `HeartRateMonitor/`: C# / WPF アプリケーション。
-  - `BluetoothMonitor`、`GattAccess`、`AutoConnector`: BLE 通信・検出・再接続。
-  - `RecordingEngine`: 記録処理の調整。
-  - `Store` とその分割ファイル: Windows の `winsqlite3.dll` を使った永続化。
-  - `OscSender`: VRChat 向け OSC パラメーターの送信。
-  - `MainWindow.*` とチャートコントロール: UI。通信・記録・永続化の責務を持ち込まない。
-  - `Theme.xaml`: 共通の色・テーマリソース。
-  - `AppIcon.xaml`: アプリアイコンの定義。
-- `tests/`: 依存パッケージ不要のテスト、UI 自動化、Bluetooth 診断。
-- `tools/`: アイコン生成などの開発用スクリプト。
+- `HeartRateMonitor/`: C# WPF application.
+  - `BluetoothMonitor`, `GattAccess`, and `AutoConnector`: BLE communication, discovery, and reconnection.
+  - `RecordingEngine`: recording coordination.
+  - `Store` and its partial files: persistence using Windows `winsqlite3.dll`.
+  - `OscSender`: VRChat OSC parameter transmission.
+  - `MainWindow.*` and chart controls: UI. Keep communication, recording, and persistence responsibilities in their respective components.
+  - `Theme.xaml`: shared colors and theme resources.
+  - `AppIcon.xaml`: application icon definition.
+- `tests/`: dependency-free tests, UI automation, and Bluetooth diagnostics.
+- `tools/`: development scripts, including icon generation.
 
-## 実装と検証
+## Implementation and Verification
 
-### 開発環境・コード規約
+### Environment and Coding Style
 
-- 対象環境は x64 Windows 10/11、.NET Framework 4.8。ビルドには .NET SDK の Roslyn と Windows SDK メタデータが必要。NuGet 依存はない。
-- 既存の C# スタイルに合わせる。インデントは半角スペース 4 個、型・メソッド・プロパティは PascalCase、ローカル変数・private フィールドは camelCase。ファイル名は対応する型・責務に合わせる。
-- フォーマッター・リンターは設定されていない。不要な整形変更を混ぜない。
-- テストは `tests/Tests.cs` と `tests/Tests*.cs` の既存ランナーを拡張し、`Test...` メソッドと、意図が分かる `Check` / `Throws` アサーションを使う。
-- 変更に応じて、解析・変換・永続化・再接続・保存期間などの振る舞いを検証する。カバレッジ率の指定はない。
+- Target x64 Windows 10/11 and .NET Framework 4.8. Building requires .NET SDK Roslyn and Windows SDK metadata. There are no NuGet dependencies.
+- Follow existing C# style: four-space indentation, PascalCase types/methods/properties, camelCase locals/private fields, and filenames matching their types or responsibilities.
+- No formatter or linter is configured. Avoid unrelated formatting changes.
+- Extend the existing runner in `tests/Tests.cs` and `tests/Tests*.cs` with `Test...` methods and descriptive `Check` / `Throws` assertions.
+- Verify changed behavior, including parsing, conversion, persistence, reconnection, and retention where relevant. No coverage percentage is required.
 
-### 検証コマンド
+### Verification Commands
 
-リポジトリルートから実行する。ビルド時は必ず `-Test` を付ける。
+Run from the repository root. Always include `-Test` when building.
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -Test
 ```
 
-UI を変更した場合は、対話可能なデスクトップで UI 自動化も実行する。
+For UI changes, also run UI automation on an interactive desktop.
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\ui-smoke.ps1
 ```
 
-- UI の検証コードは `HeartRateMonitor/MainWindow.SmokeTest.cs` などの `*SmokeTest.cs` と `tests/ui-smoke.ps1` を参照する。
-- 手動起動は `.\artifacts\HeartRateMonitor.exe`。隔離した描画確認には `--data-dir <isolated-directory> --smoke-test` を指定する。
-- テストには一時ディレクトリまたは隔離したデータを使い、通常利用のデータベースを使わない。
-- ドキュメントのみの変更ではビルド・UI 自動化は不要。リンク先・コマンド・記載内容と実装の整合性を確認する。
-- コミット前に `git diff --check` と差分を確認する。実行した検証と、実機センサー・VRChat などで未検証の範囲を正確に報告する。
+- UI verification code lives in `HeartRateMonitor/MainWindow.SmokeTest.cs`, other `*SmokeTest.cs` files, and `tests/ui-smoke.ps1`.
+- Launch manually with `.\artifacts\HeartRateMonitor.exe`. For isolated rendering checks, pass `--data-dir <isolated-directory> --smoke-test`.
+- Use temporary or isolated test data, never the normal user database.
+- Documentation-only changes do not require builds or UI automation. Check referenced paths, commands, and consistency with the implementation instead.
+- Review the diff and run `git diff --check` before committing. Report completed verification and any physical-sensor or VRChat verification limitations accurately.
 
-## ビルド成果物の配置
+## Build Artifacts
 
-- 現在の開発ビルドは必ず `artifacts/HeartRateMonitor.exe` に出力し、前回の開発ビルドを上書きする。
-- 開発成果物は `artifacts/` 直下に置く。`artifacts/dev-*` などのビルド別ディレクトリや、別途保存する中間ビルドを作らない。
-- ログ・検証ファイルは `artifacts/logs/`、リポジトリ保守用バックアップは `artifacts/backups/` に置く。
-- 確定版スナップショットを `artifacts/versions/version-X.Y.Z/` に保存するのは、ユーザーが明示的に指示した場合だけ。実装・ビルド・テスト後に自動作成しない。
-- 既存の `artifacts/versions/version-0.0.0/` は、バージョン未設定の旧成果物専用とする。
-- 生成物はソースではない。生成物の整理を理由に製品バージョンを変更しない。
+- Always build current development source into `artifacts/HeartRateMonitor.exe`, overwriting the previous development build.
+- Keep development outputs directly under `artifacts/`. Do not create `artifacts/dev-*`, other per-build directories, or separately retained intermediate builds.
+- Store logs and verification files in `artifacts/logs/`, and repository maintenance backups in `artifacts/backups/`.
+- Save finalized version snapshots in `artifacts/versions/version-X.Y.Z/` only when explicitly instructed by the user. Never create them automatically after implementation, builds, or tests.
+- Reserve existing `artifacts/versions/version-0.0.0/` for unversioned legacy artifacts.
+- Generated files are not source. Reorganizing them does not change product versions.
 
-## 維持すべき製品仕様
+## Product Requirements
 
-### センサー・記録・OSC
+### Sensors, Recording, and OSC
 
-- HW706 を含む標準 BLE Heart Rate Service 対応センサーを、メーカー優先なしでサポートする。
-- 起動時は、未検出でも前回接続確認済みのセンサーを先に試し、その後に Heart Rate Service を確認できた候補へ接続する。名前だけで接続対象と判定しない。
-- Stop 中は検出・再接続を停止し、再開操作まで再開しない。
-- 心拍値をタイムスタンプ付きで永続化する。表示・出力は Live / History チャートと CSV とし、受信値の一覧テーブルは作らない。
-- 通常の測定値を捏造しない。デモ・テストデータは明示して通常データから隔離する。単発の送信テストで測定値を作らない。
-- OSC の既定値は Int `VRCOSC/Heartrate/Value`、Float `HRPercent`。送信先・パラメーター名・変換設定は変更可能に保つ。
-- 接続・保存・OSC のエラーを正確に表示する。UDP 送信成功を受信側への到達確認として扱わない。
-- `Beko.BluetoothHeartRateOSC` は振る舞いの参考に限り、ソースをコピーしない。
+- Support standard BLE Heart Rate Service sensors, including HW706, without manufacturer preference.
+- Auto-connect on startup: first try the previously verified sensor even if undiscovered, then service-qualified candidates. Names alone do not qualify a sensor.
+- Stop suspends discovery and reconnection until resumed.
+- Persist timestamped readings. Provide Live/History charts and CSV export, never received-reading tables.
+- Never fabricate normal readings. Label and isolate demo/test data. One-shot transmission tests must not create readings.
+- Default OSC parameters are Int `VRCOSC/Heartrate/Value` and Float `HRPercent`. Keep destination, parameter names, and conversion configurable.
+- Report connection, storage, and OSC errors truthfully. UDP send success does not prove delivery.
+- Use `Beko.BluetoothHeartRateOSC` as a behavioral reference only; do not copy its source.
 
-### UI・設定
+### UI and Settings
 
-- 日本語 / 英語、Light / Dark / System テーマ、共通テーマリソース、設定の保存を維持する。
-- 永続的な設定は Settings に集約し、ツールバーのテーマ切替ショートカットは残す。
-- ピル型バッジや引き伸ばしたステータスコンテナーを避け、接続ボタンは共通のグリッド列で揃える。
-- トレイ常駐と明示的な Exit を維持する。
-- History の初期表示範囲は 10 分、スライダーの最小範囲は 1 分を維持する。
+- Preserve Japanese/English support, Light/Dark/System themes, shared theme resources, and saved preferences.
+- Keep persistent options in Settings and retain the toolbar theme shortcut.
+- Avoid pill badges and stretched status containers. Align connection buttons with shared grid columns.
+- Preserve tray residency with explicit Exit.
+- Preserve History's initial ten-minute window and one-minute slider minimum.
 
-### データ保存期間
+### Data Retention
 
-- 既定は無期限保存とし、既存設定の移行時も維持する。
-- 保存期間の選択肢は Settings のみに置き、無期限 / 1 / 7 / 30 / 90 / 365 日とする。
-- 有限の保存期間が設定されている場合は、起動時・設定変更時・少なくとも毎分、期限切れデータを削除する。
-- 削除が取り消せないことを、日本語・英語の UI と README に明記する。
-- Live / History に現在の保存期間を表示する。
+- Retain readings indefinitely by default, including when migrating existing settings.
+- Offer retention choices only in Settings: Unlimited / 1 / 7 / 30 / 90 / 365 days.
+- With finite retention enabled, delete expired data at startup, on policy changes, and at least every minute.
+- Disclose irreversible deletion in both Japanese and English UI and documentation.
+- Show active retention on Live and History.
 
-## バージョン・コミット・公開
+## Versioning, Commits, and Publishing
 
-### バージョン変更
+### Version Changes
 
-- 現在の製品バージョンは `HeartRateMonitor/AppVersion.cs` を参照する。ユーザーの明示的な指示なしに確定・更新しない。
-- バージョン変更を指示された場合は SemVer に従う。1.0 未満は互換機能追加を MINOR、修正を PATCH とし、1.0 以降は破壊的変更を MAJOR、互換機能追加を MINOR、修正を PATCH とする。
-- `-beta.N` / `-rc.N` のプレリリースを使用できる。
-- `AppVersion.cs`、`HeartRateMonitor/app.manifest` の identity、表示タイトル、両 README のバージョン表記を同時に整合させる。
-- 製品・informational バージョンはプレリリース接尾辞を含めた `X.Y.Z`、assembly / file / manifest バージョンは数値のみの `X.Y.Z.0` とする。
+- Read the current product version from `HeartRateMonitor/AppVersion.cs`. Do not finalize or bump it without explicit user instruction.
+- When instructed to change the version, follow SemVer: before 1.0, MINOR for compatible features and PATCH for fixes; afterward, MAJOR for breaking changes, MINOR for compatible features, and PATCH for fixes.
+- Prerelease suffixes such as `-beta.N` and `-rc.N` are allowed.
+- Update `AppVersion.cs`, the identity in `HeartRateMonitor/app.manifest`, the visible title, and both README version references together.
+- Product/informational versions use `X.Y.Z` with any prerelease suffix. Assembly/file/manifest versions use numeric `X.Y.Z.0`.
 
-### コミット・PR
+### Commits and Pull Requests
 
-- Conventional Commits の `<type>[optional scope][!]: <description>` に従い、簡潔な命令形の件名にする。例: `fix: handle empty input`、`feat(osc): add destination setting`。
-- 破壊的変更には type / scope の後の `!` または `BREAKING CHANGE:` フッターを付ける。
-- PR には変更後の振る舞い、関連 issue、検証結果、実機検証の制約を記載する。見た目の変更にはスクリーンショットを添える。
+- Follow Conventional Commits: `<type>[optional scope][!]: <description>`. Use concise imperative subjects, such as `fix: handle empty input` or `feat(osc): add destination setting`.
+- Mark breaking changes with `!` after the type/scope or a `BREAKING CHANGE:` footer.
+- PRs should explain resulting behavior, link relevant issues, report verification and hardware limitations, and include screenshots for visual changes.
 
-### GitHub リリースノート
+### GitHub Release Notes
 
-- 該当するトップレベル見出し `Added`、`Changed`、`Fixed`、`Removed`（または `Deleted`）と、変更説明の箇条書きだけで構成する。空の分類は省略する。
-- 各項目は対応する動詞で始める。例: `- Added ...`。
-- テスト結果・件数、検証メモ、SHA / チェックサム、インストール手順、その他の補足セクション・文章は含めない。
+- Use only change-description bullet lists under applicable top-level headings: `Added`, `Changed`, `Fixed`, and `Removed` (or `Deleted`). Omit empty categories.
+- Start each bullet with the corresponding verb, for example `- Added ...`.
+- Do not include test results or counts, verification notes, SHA/checksums, installation instructions, or other supplementary sections or prose.
