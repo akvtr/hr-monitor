@@ -50,7 +50,6 @@ namespace HeartRateMonitor
             calendarDay = range; historyWindow = range;
             var date = DateTimeOffset.FromUnixTimeMilliseconds(range.From).LocalDateTime;
             activityCalendar.SetMonth(date); activityCalendar.SetSelectedDate(date);
-            historyNavigator.SetData(HistoryDomain(), historyOverview, historyWindow, historyData != null);
             ScheduleHistory();
             historyJumpStatus.Text = T("指定日時から表示しています。", "Showing the range from the requested date and time.");
         }

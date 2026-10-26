@@ -184,7 +184,7 @@ namespace HeartRateMonitor
         private void Tick()
         {
             UpdateSleepStatus();
-            if (sleepHistoryDirty && tabs.SelectedIndex == 1 && historyLoaded && !historyNavigator.IsInteracting) {
+            if (sleepHistoryDirty && tabs.SelectedIndex == 1 && historyLoaded) {
                 if (!sleepHistoryLoading) { sleepHistoryDirty = false; _ = RefreshSleepHistory(); }
             }
             if (!closing && tabs.SelectedIndex == 1 && DateTime.UtcNow >= activityRefreshAt) _ = RefreshActivity();

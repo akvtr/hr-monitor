@@ -10,16 +10,9 @@ namespace HeartRateMonitor
 
         internal HistoryRepository(string database) { this.database = database; }
 
-        internal HistoryOverview LoadOverview()
+        internal TimeWindow LoadBounds()
         {
-            using (var store = new Store(database)) {
-                return store.ReadSnapshot(() => {
-                    var bounds = store.HistoryBounds();
-                    return new HistoryOverview(bounds,
-                        bounds == null ? new List<ChartPoint>() : store.Chart(bounds.From, bounds.To, ChartBuckets.MaximumPoints),
-                        bounds == null ? new List<ChartPoint>() : store.Chart(bounds.From, bounds.To, 1200));
-                });
-            }
+            using (var store = new Store(database)) return store.HistoryBounds();
         }
 
         internal HistoryDetail LoadWindow(TimeWindow range)
@@ -51,16 +44,6 @@ namespace HeartRateMonitor
         {
             using (var store = new Store(database)) return store.Export(path, range.From, range.To);
         }
-    }
-
-    internal sealed class HistoryOverview
-    {
-        internal TimeWindow Bounds { get; }
-        internal List<ChartPoint> Preview { get; }
-        internal List<ChartPoint> Overview { get; }
-
-        internal HistoryOverview(TimeWindow bounds, List<ChartPoint> preview, List<ChartPoint> overview)
-        { Bounds = bounds; Preview = preview; Overview = overview; }
     }
 
     internal sealed class HistorySleepWindow

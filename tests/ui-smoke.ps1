@@ -78,12 +78,12 @@ try {
     (Find-Control 'LiveScale0').GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
     (Find-Control 'Tab1').GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
     Start-Sleep -Milliseconds 600
-    if (!(Find-Control 'HistorySelection').Current.IsEnabled) { throw 'History overview move handle is disabled with recordings.' }
+    if ($window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'HistorySelection')))) { throw 'Removed overview handle is still present.' }
     $latestRange = (Find-Control 'HistoryVisibleRange').Current.Name
     (Find-Control 'HistoryPrevious').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
     Start-Sleep -Milliseconds 350
     if ((Find-Control 'HistoryVisibleRange').Current.Name -eq $latestRange) { throw 'Previous did not move the selected range.' }
-    Write-Output 'PASS overview range can navigate old recordings'
+    Write-Output 'PASS main history range can navigate old recordings'
     foreach ($spanIndex in @(1,2,3,4,0)) {
         $span = Find-Control ('HistoryScale' + $spanIndex)
         $selection = $span.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern)
@@ -149,7 +149,7 @@ try {
         foreach ($scrollbar in $viewport.FindAll([System.Windows.Automation.TreeScope]::Descendants, $scrollCondition)) {
             if (!$scrollbar.Current.IsOffscreen) { throw 'History contains a visible scrollbar.' }
         }
-        foreach ($id in @('ActivityPreviousMonth','ActivityNextMonth','ActivityThisMonth','HistoryJumpDate','HistoryJumpTime','HistoryJump','HistorySelection','HistoryScale0','HistoryScale5','HistorySpanSlider','HistoryVisibleRange','HistorySummary','HistoryPrevious','HistoryNext','HistoryLatest','HistoryExport','HistoryAnalysisExport','HistoryRetentionNotice')) {
+        foreach ($id in @('ActivityPreviousMonth','ActivityNextMonth','ActivityThisMonth','HistoryJumpDate','HistoryJumpTime','HistoryJump','HistoryScale0','HistoryScale5','HistorySpanSlider','HistoryVisibleRange','HistorySummary','HistoryPrevious','HistoryNext','HistoryLatest','HistoryExport','HistoryAnalysisExport','HistoryRetentionNotice')) {
             $control = Find-Control $id
             $rect = $control.Current.BoundingRectangle
             if ($rect.IsEmpty -or $rect.Width -le 0 -or $rect.Height -le 0 -or $rect.Left -lt $bounds.Left - 1 -or $rect.Top -lt $bounds.Top - 1 -or $rect.Right -gt $bounds.Right + 1 -or $rect.Bottom -gt $bounds.Bottom + 1) { throw ('History control does not fit: ' + $id + ' ' + $rect + ' within ' + $bounds) }

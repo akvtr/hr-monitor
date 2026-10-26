@@ -8,7 +8,10 @@ namespace HeartRateMonitor
         private void ConfigureChartInteraction(HeartChart chart, bool isHistory)
         {
             chart.RangeSelectionEnabled = true; chart.ClearSelection();
-            if (isHistory) chart.SelectionChanged += UpdateExportButtons;
+            if (isHistory) {
+                chart.SelectionChanged += UpdateExportButtons;
+                chart.PanRequested += PanHistory;
+            }
             chart.AnalysisRequested += async range => {
                 int revision = chart.SelectionRevision;
                 try {
@@ -31,9 +34,17 @@ namespace HeartRateMonitor
                 }
             };
         }
+        private void PanHistory(int delta)
+        {
+            if (historyData == null || delta == 0) return;
+            var current = CurrentHistory();
+            var moved = HistorySelection.Scroll(HistoryDomain(), current, delta);
+            if (moved.From == current.From && moved.To == current.To) return;
+            historyWindow = moved; ScheduleHistory();
+        }
         private void ZoomHistory(double anchor, int delta)
         {
-            if (historyData == null || historyNavigator.IsInteracting) return;
+            if (historyData == null) return;
             var current = CurrentHistory();
             var zoom = HistorySelection.Zoom(HistoryDomain(), current, delta, anchor);
             if (zoom.From == current.From && zoom.To == current.To) return;

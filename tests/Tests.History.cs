@@ -18,10 +18,22 @@ internal static partial class Tests
         Check(TimeSpanPicker.Decode(TimeSpanPicker.Encode(7140001), 7140001) == 7140001, "slider endpoint includes final sample without rounding down");
         var domain = new TimeWindow(0, 86400000);
         var range = new TimeWindow(1200000, 1800000);
+        var scrolled = HistorySelection.Scroll(domain, range, 120);
+        Check(scrolled.From == 1140000 && scrolled.To == 1740000, "wheel up moves earlier by ten percent without resizing");
+        scrolled = HistorySelection.Scroll(domain, range, -120);
+        Check(scrolled.From == 1260000 && scrolled.To == 1860000, "wheel down moves later without resizing");
+        scrolled = HistorySelection.Scroll(domain, range, 60);
+        Check(scrolled.From == 1170000, "high-resolution wheel movement scales proportionally");
+        scrolled = HistorySelection.Scroll(domain, range, int.MaxValue);
+        Check(scrolled.From == domain.From && scrolled.To == 600000, "wheel clamps to oldest recording");
+        scrolled = HistorySelection.Scroll(domain, range, int.MinValue);
+        Check(scrolled.To == domain.To && scrolled.From == domain.To - 600000, "wheel clamps to newest recording");
+        scrolled = HistorySelection.Scroll(domain, range, 0);
+        Check(scrolled.From == range.From && scrolled.To == range.To, "zero wheel delta leaves range unchanged");
         var moved = HistorySelection.Move(domain, range, -86400000);
-        Check(moved.From == 0 && moved.To == 600000, "overview pan clamps left while preserving width");
+        Check(moved.From == 0 && moved.To == 600000, "history pan clamps left while preserving width");
         moved = HistorySelection.Move(domain, range, 86400000);
-        Check(moved.From == 85800000 && moved.To == domain.To, "overview pan clamps right while preserving width");
+        Check(moved.From == 85800000 && moved.To == domain.To, "history pan clamps right while preserving width");
         moved = HistorySelection.Move(domain, range, long.MaxValue);
         Check(moved.From == 85800000 && moved.To == domain.To, "extreme positive pan clamps right without overflowing left");
         moved = HistorySelection.Move(domain, range, long.MinValue);
@@ -268,9 +280,9 @@ internal static partial class Tests
     {
         string database = Path.Combine(folder, "history-repository.db");
         var history = new HistoryRepository(database);
-        var empty = history.LoadOverview();
-        Check(empty.Bounds == null && empty.Preview.Count == 0 && empty.Overview.Count == 0,
-            "empty history overview has no fabricated bounds or chart points");
+        var empty = history.LoadBounds();
+        Check(empty == null,
+            "empty history has no fabricated bounds");
         var range = new TimeWindow(1000, 4000);
         var detail = history.LoadWindow(range);
         Check(detail.Summary.Count == 0 && detail.Points.Count == 0, "empty history window has no samples");
@@ -282,9 +294,9 @@ internal static partial class Tests
             store.Add(new Reading { UnixMs = 3000, Bpm = 0 });
             store.Add(new Reading { UnixMs = 4000, Bpm = 200, Contact = true });
         }
-        var overview = history.LoadOverview();
-        Check(overview.Bounds.From == 1000 && overview.Bounds.To == 4001 && overview.Preview.Count == 3 && overview.Overview.Count == 3,
-            "history overview reads current bounds and filters invalid chart samples");
+        var bounds = history.LoadBounds();
+        Check(bounds.From == 1000 && bounds.To == 4001,
+            "history reads current bounds without loading chart samples");
         detail = history.LoadWindow(range);
         Check(detail.Summary.Count == 2 && detail.Summary.Average == 80 && detail.Summary.Min == 60 && detail.Summary.Max == 100 && detail.Points.Count == 2,
             "history detail preserves exact statistics and half-open chart boundaries");
@@ -306,7 +318,7 @@ internal static partial class Tests
         Throws(() => history.Export(folder, range), "history export reports an inaccessible output target");
         Check(history.LoadWindow(range).Summary.Count == 2, "history queries remain usable after export failure");
         using (var store = new Store(database)) store.DeleteBefore(4000);
-        Check(history.LoadOverview().Bounds.From == 4000 && history.LoadWindow(range).Summary.Count == 0,
+        Check(history.LoadBounds().From == 4000 && history.LoadWindow(range).Summary.Count == 0,
             "history reload observes retention changes without stale cached records");
     }
 

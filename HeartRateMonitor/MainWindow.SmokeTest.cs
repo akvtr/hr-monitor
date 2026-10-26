@@ -152,6 +152,25 @@ namespace HeartRateMonitor
                             if (analysisExportButton.IsEnabled)
                                 throw new InvalidOperationException("Analysis export must be disabled without a selection.");
                             if (historyData != null) {
+                                var original = historyWindow;
+                                var originalWidth = historyWidth;
+                                var wheel = new System.Windows.Input.MouseWheelEventArgs(System.Windows.Input.Mouse.PrimaryDevice, Environment.TickCount, 120) {
+                                    RoutedEvent = System.Windows.Input.Mouse.PreviewMouseWheelEvent
+                                };
+                                historyChart.RaiseEvent(wheel);
+                                if (historyWidth != originalWidth || historyWindow.From >= original.From)
+                                    throw new InvalidOperationException("Wheel up must pan earlier without resizing.");
+                                if (!wheel.Handled) throw new InvalidOperationException("History wheel input must not scroll the containing page.");
+                                historyChart.RaiseEvent(new System.Windows.Input.MouseWheelEventArgs(System.Windows.Input.Mouse.PrimaryDevice, Environment.TickCount, -120) {
+                                    RoutedEvent = System.Windows.Input.Mouse.PreviewMouseWheelEvent
+                                });
+                                if (historyWindow.From != original.From || historyWindow.To != original.To)
+                                    throw new InvalidOperationException("Wheel down must return to the latest window.");
+                                historyChart.HandleWheel(0.5, 120, System.Windows.Input.ModifierKeys.Control);
+                                if (historyWidth >= originalWidth)
+                                    throw new InvalidOperationException("Ctrl+wheel must still zoom the history chart.");
+                                historyWindow = original; historyWidth = originalWidth; ScheduleHistory(); await LoadHistory();
+                                File.AppendAllText(checksPath, $"PASS {language}/{mode}: history wheel pans both directions and Ctrl+wheel zooms.{Environment.NewLine}");
                                 var select = typeof(HeartChart).GetMethod("SetSelectionRange", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
                                 select.Invoke(historyChart, new object[] { new TimeWindow(historyWindow.From, historyWindow.From + Math.Max(1, historyWidth / 2)) });
                                 if (!analysisExportButton.IsEnabled || !exportButton.IsEnabled)

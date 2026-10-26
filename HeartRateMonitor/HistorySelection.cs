@@ -16,6 +16,13 @@ namespace HeartRateMonitor
             long from = selection.From + (long)Math.Round((oldWidth - width) * anchor);
             return Clamp(domain, new TimeWindow(from, from + width));
         }
+        public static TimeWindow Scroll(TimeWindow domain, TimeWindow selection, int wheelDelta)
+        {
+            selection = Clamp(domain, selection);
+            // One wheel notch moves by a tenth of the visible duration; positive goes earlier.
+            long shift = (long)Math.Round(-(selection.To - selection.From) * (wheelDelta / 120.0) / 10);
+            return Move(domain, selection, shift);
+        }
         public static TimeWindow SelectedInterval(TimeWindow view, double start, double end)
         {
             start = Math.Max(0, Math.Min(1, start)); end = Math.Max(0, Math.Min(1, end));

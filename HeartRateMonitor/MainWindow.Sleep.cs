@@ -22,7 +22,7 @@ namespace HeartRateMonitor
             try {
                 var result = await Task.Run(() => history.LoadSleepWindow(range));
                 if (closing) return;
-                if (revision != historyRevision || boundsRevision != historyBoundsRevision || historyNavigator.IsInteracting) {
+                if (revision != historyRevision || boundsRevision != historyBoundsRevision) {
                     sleepHistoryDirty = true; return;
                 }
                 historyData = result.Bounds;
@@ -30,10 +30,8 @@ namespace HeartRateMonitor
                 var clamped = CurrentHistory(domain);
                 if (clamped.From != range.From || clamped.To != range.To) {
                     historyWindow = clamped;
-                    historyNavigator.SetData(domain, historyOverview, historyWindow, historyData != null);
                     ScheduleHistory(); await LoadHistory(); return;
                 }
-                historyNavigator.SetData(domain, historyOverview, historyWindow, historyData != null);
                 SynchronizeHistoryControls(domain); UpdateHistoryLabels(domain);
                 historyChart.SleepIntervals = result.Intervals; historyChart.InvalidateVisual();
                 UpdateExportButtons();

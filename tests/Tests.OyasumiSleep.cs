@@ -61,18 +61,18 @@ internal static partial class Tests
         var history = new HistoryRepository(boundsDatabase);
         using (var store = new Store(boundsDatabase)) {
             store.SaveSleepInterval(new SleepInterval { From = 500, To = 500 });
-            Check(history.LoadOverview().Bounds == null, "zero-duration sleep observations do not create navigable history");
+            Check(history.LoadBounds() == null, "zero-duration sleep observations do not create navigable history");
             var sleep = new SleepInterval { From = 1000, To = 5000 };
             store.SaveSleepInterval(sleep);
-            var overview = history.LoadOverview();
-            Check(overview.Bounds.From == 1000 && overview.Bounds.To == 5000 && overview.Preview.Count == 0,
+            var bounds = history.LoadBounds();
+            Check(bounds.From == 1000 && bounds.To == 5000 && history.LoadWindow(bounds).Points.Count == 0,
                 "sleep-only history is navigable without fabricated heart-rate samples");
             store.Add(new Reading { UnixMs = 9000, Bpm = 70 });
             sleep.To = 12000; store.SaveSleepInterval(sleep);
             var window = history.LoadSleepWindow(new TimeWindow(8000, 13000));
             Check(window.Bounds.From == 1000 && window.Bounds.To == 12000 && window.Intervals.Single().To == 12000,
                 "lightweight sleep refresh includes intervals outside the heart-rate bounds");
-            Check(history.LoadOverview().Bounds.To == 12000 && history.LoadWindow(new TimeWindow(8000, 13000)).Summary.Count == 1,
+            Check(history.LoadBounds().To == 12000 && history.LoadWindow(new TimeWindow(8000, 13000)).Summary.Count == 1,
                 "combined history bounds preserve real heart-rate statistics");
         }
 

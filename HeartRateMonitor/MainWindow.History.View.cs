@@ -19,12 +19,11 @@ namespace HeartRateMonitor
                 // Keep the requested day, including empty days, rather than clamping to a different date.
                 calendarDay = new TimeWindow(from, to);
                 historyWindow = calendarDay; historyWidth = to - from;
-                historyNavigator.SetData(HistoryDomain(), historyOverview, historyWindow, historyData != null);
                 ScheduleHistory();
             };
             historyStats = Label("", 12); historyRange = Label("", 26, "Text"); historyRange.FontWeight = FontWeights.SemiBold; historyRange.FontFamily = new FontFamily("Bahnschrift, Segoe UI");
-            historyBounds = Label("", 12); historyFirst = Label("", 13, "Text"); historyLast = Label("", 13, "Text");
-            historyPosition = Label("", 12, "Accent"); exportStatus = Label("", 12);
+            historyBounds = Label("", 12);
+            exportStatus = Label("", 12);
             foreach (var status in new[] { historyStats, exportStatus }) {
                 status.TextWrapping = TextWrapping.NoWrap; status.TextTrimming = TextTrimming.CharacterEllipsis;
                 status.SetBinding(ToolTipProperty, new System.Windows.Data.Binding("Text") { Source = status });
@@ -43,15 +42,6 @@ namespace HeartRateMonitor
                 option.Checked += (s, e) => { if (settingHistory) return; long end = historyWindow?.To ?? historyData?.To ?? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(); historyScaleIndex = index; UpdateHistoryWidth(); MoveHistoryTo(end); };
                 presets.Children.Add(option); historyPresets.Add(option);
             }
-            historyNavigator = new HistoryNavigator();
-            historyNavigator.ZoomRequested += ZoomHistory;
-            historyNavigator.InteractionStarted += () => historyDebounce.Stop();
-            historyNavigator.SelectionChanged += range => { historyWindow = range; historyWidth = range.To - range.From; ScheduleHistory(); };
-            historyNavigator.InteractionCompleted += () => {
-                if (historyRefreshPending) { historyRefreshPending = false; _ = RefreshHistory(false); }
-                else { historyDebounce.Stop(); historyDebounce.Start(); }
-            };
-            historyNavigator.SetData(HistoryDomain(), historyOverview, historyWindow ?? CurrentHistory(), historyData != null);
             if (!historyTimerAttached) { historyDebounce.Tick += async (s, e) => { historyDebounce.Stop(); await LoadHistory(); }; historyTimerAttached = true; }
             var latest = Button(T("最新の記録へ", "Latest recordings"), async (s, e) => await RefreshHistory(true), id: "HistoryLatest", width: 164); latest.Margin = new Thickness(0, 0, 12, 0); latest.Height = 40;
             historySpanPicker = new TimeSpanPicker("HistorySpanSlider") { Width = 300, Margin = new Thickness(16, 0, 0, 0) };
@@ -65,14 +55,11 @@ namespace HeartRateMonitor
             var rangeRow = new DockPanel(); var arrows = Horizontal(latest, historyBack, historyForward); arrows.Margin = new Thickness(16, 0, 0, 0); DockPanel.SetDock(arrows, Dock.Right); rangeRow.Children.Add(arrows);
             rangeRow.Children.Add(Stack(historyRange, historyBounds)); historyBounds.Margin = new Thickness(0, 4, 0, 0);
             historyStats.Margin = new Thickness(0, 6, 0, 4);
-            var plotGrid = new Grid(); plotGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); plotGrid.RowDefinitions.Add(new RowDefinition { MinHeight = 120 }); plotGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var plotGrid = new Grid(); plotGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); plotGrid.RowDefinitions.Add(new RowDefinition { MinHeight = 120 });
             plotGrid.Children.Add(Stack(toolbar, rangeRow, historyStats));
             historyChart.MinHeight = 120; AutomationProperties.SetAutomationId(historyChart, "HistoryChart"); Grid.SetRow(historyChart, 1); plotGrid.Children.Add(historyChart);
 
-            var timelineTitle = new DockPanel(); DockPanel.SetDock(historyPosition, Dock.Right); timelineTitle.Children.Add(historyPosition); timelineTitle.Children.Add(Label(T("全体グラフ", "OVERVIEW"), 12));
-            var endpoints = new Grid(); endpoints.ColumnDefinitions.Add(new ColumnDefinition()); endpoints.ColumnDefinitions.Add(new ColumnDefinition()); endpoints.Children.Add(historyFirst); Grid.SetColumn(historyLast, 1); historyLast.HorizontalAlignment = HorizontalAlignment.Right; endpoints.Children.Add(historyLast);
-            historyChart.ToolTip = T("ドラッグで区間を選択 · Ctrl＋ホイールで拡大・縮小 · Escで解除", "Drag to select an interval · Ctrl+wheel to zoom · Esc to clear");
-            var timeline = Stack(timelineTitle, historyNavigator, endpoints); timeline.Margin = new Thickness(0, 6, 0, 0); Grid.SetRow(timeline, 2); plotGrid.Children.Add(timeline);
+            historyChart.ToolTip = T("ホイールで前後に移動 · Ctrl＋ホイールで拡大・縮小 · ドラッグで区間を選択 · Escで解除", "Wheel to move through time · Ctrl+wheel to zoom · Drag to select an interval · Esc to clear");
 
             exportButton = Button(T("表示期間をCSV出力", "Export range to CSV"), ExportClicked, primary: true, id: "HistoryExport", width: 196); exportButton.Margin = new Thickness(16, 0, 0, 0); exportButton.IsEnabled = false;
             exportButton.ToolTip = T("表示期間に含まれる全測定値を書き出します。", "Exports every sample in the displayed range.");

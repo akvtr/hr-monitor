@@ -15,6 +15,7 @@ namespace HeartRateMonitor
         public HistorySummary SelectedSummary { get; private set; }
         public int SelectionRevision { get; private set; }
         public event Action<double, int> ZoomRequested;
+        public event Action<int> PanRequested;
         public event Action<TimeWindow> AnalysisRequested;
         public event Action SelectionChanged;
         private readonly DispatcherTimer analysisDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
@@ -30,8 +31,7 @@ namespace HeartRateMonitor
             Unloaded += (s, e) => analysisDebounce.Stop();
             Loaded += (s, e) => { if (SelectedRange != null && SelectedSummary == null) RequestAnalysis(); };
             PreviewMouseWheel += (s, e) => {
-                if ((Keyboard.Modifiers & ModifierKeys.Control) == 0 || ZoomRequested == null) return;
-                ClearSelection(); ZoomRequested(Fraction(e.GetPosition(this).X), e.Delta); e.Handled = true;
+                e.Handled = HandleWheel(Fraction(e.GetPosition(this).X), e.Delta, Keyboard.Modifiers);
             };
             MouseLeftButtonDown += (s, e) => {
                 var point = e.GetPosition(this);
@@ -44,6 +44,17 @@ namespace HeartRateMonitor
             LostMouseCapture += (s, e) => { if (selecting) FinishSelection(); };
             MouseRightButtonDown += (s, e) => { if (SelectedRange != null || selecting) { ClearSelection(); e.Handled = true; } };
             KeyDown += (s, e) => { if (e.Key == Key.Escape && (SelectedRange != null || selecting)) { ClearSelection(); e.Handled = true; } };
+        }
+        internal bool HandleWheel(double anchor, int delta, ModifierKeys modifiers)
+        {
+            if ((modifiers & ModifierKeys.Control) != 0) {
+                if (ZoomRequested == null) return false;
+                ClearSelection(); ZoomRequested(anchor, delta);
+            } else {
+                if (PanRequested == null) return false;
+                ClearSelection(); PanRequested(delta);
+            }
+            return true;
         }
         private void UpdateSelection(Point point)
         {
@@ -62,6 +73,7 @@ namespace HeartRateMonitor
             AutomationProperties.SetHelpText(this, range == null
                 ? Words.T("Ctrl＋ホイールで拡大・縮小。ドラッグで区間を選択。Esc・右クリックで選択解除。", "Ctrl+wheel to zoom. Drag to select an interval. Escape or right-click clears it.")
                 : SelectionText());
+            if (range == null && PanRequested != null) AutomationProperties.SetHelpText(this, Words.T("ホイールで前後に移動。", "Wheel to move through time. ") + AutomationProperties.GetHelpText(this));
             InvalidateVisual();
         }
         private void FinishSelection()
