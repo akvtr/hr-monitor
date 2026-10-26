@@ -18,7 +18,7 @@ Always include `-Test` when building. Run UI automation on an interactive deskto
 
 Always build the current development source into `artifacts/HeartRateMonitor.exe`, overwriting the previous development build. Do not create `artifacts/dev-*` or other per-build directories, and do not retain separate intermediate builds.
 
-Treat binaries/configuration/ZIP and verification files directly under `artifacts/` as development artifacts, even after verification. Create `artifacts/version-X.Y.Z/` and store finalized version snapshots there only when explicitly instructed by the user. Do not create version directories automatically after implementation, builds, or tests. Reserve existing `version-0.0.0/` for unversioned legacy artifacts. Generated files are not source; reorganizing them does not change product versions.
+Keep current development build outputs directly under `artifacts/`. Store logs and verification files in `artifacts/logs/`, and repository maintenance backups in `artifacts/backups/`. Store finalized version snapshots in `artifacts/versions/version-X.Y.Z/` only when explicitly instructed by the user. Do not create version snapshot directories automatically after implementation, builds, or tests. Reserve existing `artifacts/versions/version-0.0.0/` for unversioned legacy artifacts. Generated files are not source; reorganizing them does not change product versions.
 
 ## Coding Style & Testing
 
@@ -35,7 +35,7 @@ Follow existing C# style: four-space indentation, PascalCase types/methods/prope
 
 ## Versioning, Commits & Pull Requests
 
-Current version: `0.20.0`. Do not finalize or bump the product version until the user explicitly instructs you to do so. Implementation, builds, tests, and verification alone do not authorize version finalization or creation of `artifacts/version-X.Y.Z/`. When a version change is explicitly requested, use SemVer: before 1.0, MINOR for compatible features and PATCH for fixes; afterward, MAJOR for breaking changes, MINOR for compatible features, and PATCH for fixes. Allow `-beta.N`/`-rc.N`. Update `AppVersion.cs`, manifest identity, visible title, and both README version references together. Product/informational versions use `X.Y.Z` with any prerelease suffix; assembly/file/manifest versions use numeric `X.Y.Z.0`.
+Current version: `0.20.0`. Do not finalize or bump the product version until the user explicitly instructs you to do so. Implementation, builds, tests, and verification alone do not authorize version finalization or creation of `artifacts/versions/version-X.Y.Z/`. When a version change is explicitly requested, use SemVer: before 1.0, MINOR for compatible features and PATCH for fixes; afterward, MAJOR for breaking changes, MINOR for compatible features, and PATCH for fixes. Allow `-beta.N`/`-rc.N`. Update `AppVersion.cs`, manifest identity, visible title, and both README version references together. Product/informational versions use `X.Y.Z` with any prerelease suffix; assembly/file/manifest versions use numeric `X.Y.Z.0`.
 
 History contains only `Initial commit`; no established commit convention exists. Use concise imperative subjects. PRs should explain behavior, link relevant issues, report verification and hardware limits, and include screenshots for visual changes.
 

@@ -94,13 +94,13 @@ Windows SDK metadata selection compares installed versions numerically and uses 
 
 Development builds overwrite `artifacts/HeartRateMonitor.exe` and place the configuration, both READMEs, and ZIP directly under `artifacts/`. The ZIP includes the EXE, configuration, and both READMEs. Exit from the tray before replacing a running EXE.
 
-Generated files and verification output directly under `artifacts/` are development artifacts. Builds and verification do not finalize the product version or automatically create version directories. Reserve `artifacts/version-X.Y.Z/` for finalized snapshots only when explicitly instructed to finalize a version. The existing `version-0.0.0/` is for unversioned legacy artifacts.
+Keep current development build outputs directly under `artifacts/`. Store logs and verification files in `artifacts/logs/`, and repository maintenance backups in `artifacts/backups/`. Builds and verification do not finalize the product version or automatically create version directories. Reserve `artifacts/versions/version-X.Y.Z/` for finalized snapshots only when explicitly instructed to finalize a version. The existing `artifacts/versions/version-0.0.0/` is for unversioned legacy artifacts.
 
 Additional checks on an interactive Windows desktop:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\ui-smoke.ps1
-.\artifacts\HeartRateMonitor.exe --data-dir .\artifacts\verification\render --smoke-test
+.\artifacts\HeartRateMonitor.exe --data-dir .\artifacts\logs\verification\render --smoke-test
 ```
 
 The UI script seeds a temporary database labeled `ISOLATED UI TEST`. Rendering smoke mode checks Japanese/English and Light/Dark/System pages, captures PNGs, and writes `smoke-checks.txt`. It saves test settings: always use an isolated `--data-dir`. Smoke mode rejects an omitted data directory or the normal profile directory. A missing `--data-dir` value, duplicate data-directory option, or unknown argument also causes a startup error. These are procedures, not a claim they were run during this documentation update.

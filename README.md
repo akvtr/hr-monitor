@@ -76,13 +76,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -Test
 
 開発ビルドは `artifacts/HeartRateMonitor.exe` を上書きし、設定ファイル・日英README・配布ZIPも `artifacts/` 直下に配置します。ZIPにはEXE・設定ファイル・日英READMEを含みます。実行中のEXEを置き換える前に、トレイからアプリを終了してください。
 
-`artifacts/` 直下の生成物と検証ファイルは開発用です。ビルドや検証ではバージョンを確定せず、バージョン別フォルダーも自動作成しません。`artifacts/version-X.Y.Z/` は明示的に指示されたバージョン確定時のスナップショット用、既存の `version-0.0.0/` はバージョン不明の旧生成物用です。
+`artifacts/` 直下には現在の開発ビルド成果物を置きます。ログと検証資料は `artifacts/logs/`、リポジトリ保守用バックアップは `artifacts/backups/` に保存します。ビルドや検証ではバージョンを確定せず、バージョン別フォルダーも自動作成しません。`artifacts/versions/version-X.Y.Z/` は明示的に指示されたバージョン確定時のスナップショット用、既存の `artifacts/versions/version-0.0.0/` はバージョン不明の旧生成物用です。
 
 UI変更時は対話可能なWindowsデスクトップで次の検証も行います。
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\ui-smoke.ps1
-.\artifacts\HeartRateMonitor.exe --data-dir .\artifacts\verification\render --smoke-test
+.\artifacts\HeartRateMonitor.exe --data-dir .\artifacts\logs\verification\render --smoke-test
 ```
 
 UIスクリプトは `ISOLATED UI TEST` と明示した一時データを使います。描画スモークテストは日本語・英語とLight・Dark・Systemの画面を確認し、PNGと `smoke-checks.txt` を出力します。テスト用の設定も保存するため、`--data-dir` には必ず通常の保存先とは別の専用ディレクトリを指定してください。スモークテストは保存先の省略や通常保存先の指定を拒否します。値がない `--data-dir`、その重複指定、不明な引数も起動エラーになります。
