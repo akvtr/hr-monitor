@@ -22,6 +22,7 @@ namespace HeartRateMonitor
                 Execute("CREATE INDEX IF NOT EXISTS readings_time ON readings(utc_ms);");
                 Execute("CREATE TABLE IF NOT EXISTS sleep_intervals (id INTEGER PRIMARY KEY AUTOINCREMENT, from_ms INTEGER NOT NULL, to_ms INTEGER NOT NULL CHECK(to_ms>=from_ms));");
                 Execute("CREATE INDEX IF NOT EXISTS sleep_intervals_end ON sleep_intervals(to_ms);");
+                Execute("CREATE INDEX IF NOT EXISTS sleep_intervals_start ON sleep_intervals(from_ms) WHERE to_ms>from_ms;");
             } catch { Dispose(); throw; }
         }
         // Keep related history queries consistent while other connections record or prune data.

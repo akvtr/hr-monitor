@@ -55,6 +55,25 @@ internal static partial class Tests
         using (var store = new Store(database))
             Check(store.SleepIntervals(0, 50000).Count == 4, "automatic sleep intervals survive database reopening");
 
+        string boundsDatabase = Path.Combine(folder, "oyasumi-history-bounds.db");
+        var history = new HistoryRepository(boundsDatabase);
+        using (var store = new Store(boundsDatabase)) {
+            store.SaveSleepInterval(new SleepInterval { From = 500, To = 500 });
+            Check(history.LoadOverview().Bounds == null, "zero-duration sleep observations do not create navigable history");
+            var sleep = new SleepInterval { From = 1000, To = 5000 };
+            store.SaveSleepInterval(sleep);
+            var overview = history.LoadOverview();
+            Check(overview.Bounds.From == 1000 && overview.Bounds.To == 5000 && overview.Preview.Count == 0,
+                "sleep-only history is navigable without fabricated heart-rate samples");
+            store.Add(new Reading { UnixMs = 9000, Bpm = 70 });
+            sleep.To = 12000; store.SaveSleepInterval(sleep);
+            var window = history.LoadSleepWindow(new TimeWindow(8000, 13000));
+            Check(window.Bounds.From == 1000 && window.Bounds.To == 12000 && window.Intervals.Single().To == 12000,
+                "lightweight sleep refresh includes intervals outside the heart-rate bounds");
+            Check(history.LoadOverview().Bounds.To == 12000 && history.LoadWindow(new TimeWindow(8000, 13000)).Summary.Count == 1,
+                "combined history bounds preserve real heart-rate statistics");
+        }
+
         const string prefix = "{\"FULL_PATH\":\"/OyasumiVR/SleepMode\",\"ACCESS\":3,\"VALUE_TYPE\":\"F\",\"VALUE\":";
         Check(OyasumiOscQuery.ParseSleep(prefix + "[true]}") && !OyasumiOscQuery.ParseSleep(prefix + "[false]}"), "official OSCQuery Boolean VALUE is read independently of its static false type tag");
         foreach (string invalid in new[] { "{}", prefix + "[1]}", prefix + "[\"true\"]}", prefix + "[]}", prefix.Replace("\"ACCESS\":3", "\"ACCESS\":2") + "[true]}" })
@@ -76,6 +95,17 @@ internal static partial class Tests
             TestOyasumiMonitor(folder, server, client);
         }
         TestOyasumiSettingsUi(folder);
+        using (var slow = new OyasumiTestServer { SlowBody = true }) {
+            var elapsed = System.Diagnostics.Stopwatch.StartNew();
+            Throws<TimeoutException>(() => new OyasumiOscQuery().Read(slow.Port, CancellationToken.None), "trickling OSCQuery deadline is reported as a failure rather than shutdown cancellation");
+            Check(elapsed.ElapsedMilliseconds < 4000, "slow response cannot monopolize the sleep polling worker indefinitely");
+        }
+        using (var slow = new OyasumiTestServer { SlowBody = true })
+        using (var cancel = new CancellationTokenSource(100)) {
+            var elapsed = System.Diagnostics.Stopwatch.StartNew();
+            Throws<OperationCanceledException>(() => new OyasumiOscQuery().Read(slow.Port, cancel.Token), "in-flight OSCQuery reads are canceled during shutdown or reconfiguration");
+            Check(elapsed.ElapsedMilliseconds < 1500, "canceling an active sleep request promptly interrupts blocking reads");
+        }
     }
 
     private static void TestOyasumiSettingsUi(string folder)
@@ -134,6 +164,7 @@ internal static partial class Tests
         private readonly Task worker;
         private volatile bool stopping;
         internal volatile bool Sleeping;
+        internal volatile bool SlowBody;
         internal volatile string Name = "OyasumiVR";
         internal int Port { get; }
         internal OyasumiTestServer()
@@ -152,7 +183,10 @@ internal static partial class Tests
                                 : "{\"FULL_PATH\":\"/OyasumiVR/SleepMode\",\"ACCESS\":3,\"VALUE\":[" + (Sleeping ? "true" : "false") + "]}";
                             byte[] body = Encoding.UTF8.GetBytes(json);
                             byte[] header = Encoding.ASCII.GetBytes("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: " + body.Length + "\r\nConnection: close\r\n\r\n");
-                            stream.Write(header, 0, header.Length); stream.Write(body, 0, body.Length);
+                            stream.Write(header, 0, header.Length);
+                            if (SlowBody) {
+                                foreach (byte value in body) { if (stopping) break; stream.WriteByte(value); stream.Flush(); Thread.Sleep(100); }
+                            } else stream.Write(body, 0, body.Length);
                         }
                     } catch (SocketException) { if (stopping) break; }
                     catch (IOException) { }

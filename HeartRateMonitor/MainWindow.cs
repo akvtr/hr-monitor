@@ -185,7 +185,7 @@ namespace HeartRateMonitor
         {
             UpdateSleepStatus();
             if (sleepHistoryDirty && tabs.SelectedIndex == 1 && historyLoaded && !historyNavigator.IsInteracting) {
-                sleepHistoryDirty = false; _ = LoadHistory();
+                if (!sleepHistoryLoading) { sleepHistoryDirty = false; _ = RefreshSleepHistory(); }
             }
             if (!closing && tabs.SelectedIndex == 1 && DateTime.UtcNow >= activityRefreshAt) _ = RefreshActivity();
             liveSpanPicker?.Update(liveWidth, 3600000);

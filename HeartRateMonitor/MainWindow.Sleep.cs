@@ -1,5 +1,7 @@
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System;
+using System.Threading.Tasks;
 
 namespace HeartRateMonitor
 {
@@ -9,6 +11,35 @@ namespace HeartRateMonitor
         private TextBox oyasumiPort;
         private TextBlock sleepSettingsStatus, sleepHistoryStatus;
         private bool sleepHistoryDirty;
+        private bool sleepHistoryLoading;
+
+        private async Task RefreshSleepHistory()
+        {
+            if (historyWindow == null) return;
+            sleepHistoryLoading = true;
+            int revision = historyRevision, boundsRevision = historyBoundsRevision;
+            var range = historyWindow;
+            try {
+                var result = await Task.Run(() => history.LoadSleepWindow(range));
+                if (closing) return;
+                if (revision != historyRevision || boundsRevision != historyBoundsRevision || historyNavigator.IsInteracting) {
+                    sleepHistoryDirty = true; return;
+                }
+                historyData = result.Bounds;
+                var domain = HistoryDomain();
+                var clamped = CurrentHistory(domain);
+                if (clamped.From != range.From || clamped.To != range.To) {
+                    historyWindow = clamped;
+                    historyNavigator.SetData(domain, historyOverview, historyWindow, historyData != null);
+                    ScheduleHistory(); await LoadHistory(); return;
+                }
+                historyNavigator.SetData(domain, historyOverview, historyWindow, historyData != null);
+                SynchronizeHistoryControls(domain); UpdateHistoryLabels(domain);
+                historyChart.SleepIntervals = result.Intervals; historyChart.InvalidateVisual();
+                UpdateExportButtons();
+            } catch (Exception ex) { if (!closing && revision == historyRevision) historyStats.Text = ex.Message; }
+            finally { sleepHistoryLoading = false; }
+        }
 
         private void UpdateSleepStatus()
         {

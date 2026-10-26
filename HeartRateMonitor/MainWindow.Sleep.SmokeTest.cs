@@ -18,7 +18,12 @@ namespace HeartRateMonitor
                     tracker.Observe(false, start + 90000);
                 }
             }
-            await LoadHistory();
+            await RefreshHistory(false);
+            var points = historyChart.Points;
+            string statistics = historyStats.Text;
+            await RefreshSleepHistory();
+            if (!ReferenceEquals(points, historyChart.Points) || historyStats.Text != statistics)
+                throw new InvalidOperationException("Sleep refresh must not recompute heart-rate samples or statistics.");
             await Task.Delay(120); UpdateLayout();
             if (!historyChart.SleepIntervals.Any()) throw new InvalidOperationException("Automatic sleep intervals did not reach the history chart.");
             if (GetType().GetMethod("CreateAnnotationDialog", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic) != null)

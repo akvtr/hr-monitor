@@ -6,6 +6,19 @@ namespace HeartRateMonitor
     public sealed partial class Store
     {
         internal int PrunedSleepIntervals { get; private set; }
+        internal TimeWindow HistoryBounds()
+        {
+            lock (gate) {
+                var readings = Bounds();
+                var s = Prepare("SELECT (SELECT from_ms FROM sleep_intervals WHERE to_ms>from_ms ORDER BY from_ms LIMIT 1),(SELECT to_ms FROM sleep_intervals WHERE to_ms>from_ms ORDER BY to_ms DESC LIMIT 1);");
+                try {
+                    int rc = Native.sqlite3_step(s); if (rc != Native.Row) Check(rc);
+                    if (Native.sqlite3_column_type(s, 0) == Native.Null) return readings;
+                    long first = Native.sqlite3_column_int64(s, 0), last = Native.sqlite3_column_int64(s, 1);
+                    return new TimeWindow(Math.Min(readings?.From ?? first, first), Math.Max(readings?.To ?? last, last));
+                } finally { Native.sqlite3_finalize(s); }
+            }
+        }
         internal void SaveSleepInterval(SleepInterval interval)
         {
             if (interval == null) throw new ArgumentNullException(nameof(interval));

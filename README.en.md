@@ -78,7 +78,7 @@ Every 2 seconds, the app reads the [official sleep-mode address](https://github.
 
 An interval starts at the first confirmed enabled observation and ends when mode is confirmed disabled. If communication fails, the saved interval stops at the last confirmed observation; unknown time is never filled in as sleep. A polling gap longer than 10 seconds (for example during PC suspension), an app restart, a changed integration endpoint, or disabling integration splits intervals too. Polling resumes automatically after recovery. Connection status appears in Settings and History; errors are also logged.
 
-Readings, statistics, and sample CSV columns are unchanged. Sleep labels are not included in CSV and are stored in the same database for full-directory backup. Manual note/interval creation, editing, and search have been removed. Existing manual annotation tables are preserved but never displayed or converted into sleep labels.
+Sleep labels remain selectable and visible in History even outside heart-rate recording times. Readings, statistics, and sample CSV columns are unchanged. Sleep labels are not included in CSV and are stored in the same database for full-directory backup. Manual note/interval creation, editing, and search have been removed. Existing manual annotation tables are preserved but never displayed or converted into sleep labels.
 
 With finite retention, sleep labels ending at or before the cutoff are permanently deleted too. Intervals crossing the cutoff keep their original timestamps. **Deletion is irreversible.**
 

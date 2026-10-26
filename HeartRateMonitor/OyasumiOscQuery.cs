@@ -44,18 +44,30 @@ namespace HeartRateMonitor
             var request = (HttpWebRequest)WebRequest.Create("http://127.0.0.1:" + port + path);
             request.Proxy = null; request.AllowAutoRedirect = false; request.Timeout = 1000; request.ReadWriteTimeout = 1000;
             request.KeepAlive = false;
-            using (token.Register(request.Abort))
-            using (var response = (HttpWebResponse)request.GetResponse()) {
-                if (response.StatusCode != HttpStatusCode.OK) throw new InvalidDataException("OSCQuery did not return HTTP 200.");
-                using (var stream = response.GetResponseStream())
-                using (var bytes = new MemoryStream()) {
-                    byte[] buffer = new byte[4096]; int size;
-                    while ((size = stream.Read(buffer, 0, buffer.Length)) > 0) {
-                        token.ThrowIfCancellationRequested();
-                        if (bytes.Length + size > 65536) throw new InvalidDataException("OSCQuery response is too large.");
-                        bytes.Write(buffer, 0, size);
+            // ReadWriteTimeout is per read; a trickling body otherwise has no total deadline.
+            using (var deadline = CancellationTokenSource.CreateLinkedTokenSource(token)) {
+                deadline.CancelAfter(2000);
+                try {
+                    using (deadline.Token.Register(request.Abort))
+                    using (var response = (HttpWebResponse)request.GetResponse()) {
+                        if (response.StatusCode != HttpStatusCode.OK) throw new InvalidDataException("OSCQuery did not return HTTP 200.");
+                        using (var stream = response.GetResponseStream())
+                        using (var bytes = new MemoryStream()) {
+                            byte[] buffer = new byte[4096]; int size;
+                            while ((size = stream.Read(buffer, 0, buffer.Length)) > 0) {
+                                deadline.Token.ThrowIfCancellationRequested();
+                                if (bytes.Length + size > 65536) throw new InvalidDataException("OSCQuery response is too large.");
+                                bytes.Write(buffer, 0, size);
+                            }
+                            deadline.Token.ThrowIfCancellationRequested();
+                            return new UTF8Encoding(false, true).GetString(bytes.ToArray());
+                        }
                     }
-                    return new UTF8Encoding(false, true).GetString(bytes.ToArray());
+                } catch (Exception ex) when (deadline.IsCancellationRequested) {
+                    // A network deadline is a failure, not a configuration/shutdown cancellation.
+                    // The monitor must publish Unavailable instead of retaining its previous state.
+                    if (token.IsCancellationRequested) throw new OperationCanceledException(token);
+                    throw new TimeoutException("OSCQuery response exceeded its total time limit.", ex);
                 }
             }
         }
