@@ -70,6 +70,18 @@ Retention defaults to **Unlimited**, including migration from settings without a
 
 Exit from the tray before backing up the entire data directory. To restore, exit, preserve the current folder separately, and replace it with the backup. The restored retention policy still applies at startup. There is no built-in backup/restore UI. SQLite uses WAL and FULL synchronization. Normal exit drains the queue; a crash or power loss can lose queued readings. Deletion does not guarantee immediate reduction of file size.
 
+### Automatic OyasumiVR sleep labels
+
+Run OyasumiVR on the same PC and enable its OSC server. Integration is enabled by default under **Settings → Connection & tray**. The default OSCQuery port, `0`, automatically discovers local listeners owned by OyasumiVR. If discovery fails, enter the **OSCQuery (HTTP) port** shown in OyasumiVR and save. This is different from its OSC UDP port. The host is always `127.0.0.1`. VRChat need not be running, and OSC forwarding destinations need no changes.
+
+Every 2 seconds, the app reads the [official sleep-mode address](https://github.com/Raphiiko/OyasumiVR/blob/develop/src-ui/app/services/osc-control/methods/sleep-mode.osc-method.ts), `/OyasumiVR/SleepMode`, through OSCQuery. While enabled, it records **Sleep · OyasumiVR** intervals on the history chart. It only reads OyasumiVR's state. Labels represent sleep mode, not sleep inferred from heart rate.
+
+An interval starts at the first confirmed enabled observation and ends when mode is confirmed disabled. If communication fails, the saved interval stops at the last confirmed observation; unknown time is never filled in as sleep. A polling gap longer than 10 seconds (for example during PC suspension), an app restart, a changed integration endpoint, or disabling integration splits intervals too. Polling resumes automatically after recovery. Connection status appears in Settings and History; errors are also logged.
+
+Readings, statistics, and sample CSV columns are unchanged. Sleep labels are not included in CSV and are stored in the same database for full-directory backup. Manual note/interval creation, editing, and search have been removed. Existing manual annotation tables are preserved but never displayed or converted into sleep labels.
+
+With finite retention, sleep labels ending at or before the cutoff are permanently deleted too. Intervals crossing the cutoff keep their original timestamps. **Deletion is irreversible.**
+
 Shutdown waits for accepted readings to be saved and for any CSV export in progress to finish. Large exports can therefore delay exit.
 
 ## Troubleshooting and limitations

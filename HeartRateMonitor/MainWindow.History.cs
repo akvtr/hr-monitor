@@ -89,6 +89,7 @@ namespace HeartRateMonitor
         private void ScheduleHistory()
         {
             historyChart.ClearSelection();
+            historyChart.SleepIntervals.Clear();
             var domain = HistoryDomain();
             historyRevision++; historyWindow = CurrentHistory(domain);
             historyWidth = historyWindow.To - historyWindow.From;
@@ -137,6 +138,7 @@ namespace HeartRateMonitor
                 var summary = result.Summary;
                 historyChart.Average = summary.Count > 0 ? (double?)summary.Average : null;
                 historyStats.Text = summary.Count == 0 ? T("この期間に有効な心拍データはありません。", "No valid heart-rate samples in this window.") : T($"{summary.Count:N0} 件 · 最小 {summary.Min}   平均 {summary.Average:0.0}   最大 {summary.Max} bpm", $"{summary.Count:N0} samples · Min {summary.Min}   Avg {summary.Average:0.0}   Max {summary.Max} bpm");
+                historyChart.SleepIntervals = result.SleepIntervals;
                 historyChart.Points = result.Points; historyChart.From = range.From; historyChart.To = range.To; historyChart.GapMs = Math.Max(15000, (range.To - range.From) / 400 * 2); historyChart.InvalidateVisual();
                 historyLoaded = true; UpdateExportButtons();
             } catch (Exception ex) { if (revision == historyRevision) historyStats.Text = T("読込エラー: ", "Read failed: ") + ex.Message; }

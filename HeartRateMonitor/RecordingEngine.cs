@@ -113,7 +113,11 @@ namespace HeartRateMonitor
         }
         private void PruneExpired(Store store)
         {
-            try { if (DeleteExpired(store) > 0) NotifyObservers(RetentionChanged, handler => handler()); }
+            try {
+                var cutoff = settings.RetentionCutoff(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+                if (cutoff.HasValue && (store.DeleteBefore(cutoff.Value) > 0 || store.PrunedSleepIntervals > 0))
+                    NotifyObservers(RetentionChanged, handler => handler());
+            }
             catch (Exception ex) { NotifyObservers(Error, handler => handler(Words.T("古い記録の削除に失敗しました: ", "Could not delete expired recordings: ") + ex.Message), reportErrors: false); }
         }
         private int DeleteExpired(Store store)

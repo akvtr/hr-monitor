@@ -22,6 +22,7 @@ namespace HeartRateMonitor
         private readonly AutoConnector automatic;
         private readonly ConnectionLog connectionLog;
         private readonly RecordingEngine engine;
+        private readonly OyasumiSleepMonitor sleepMonitor;
         private readonly CancellationTokenSource closingToken = new CancellationTokenSource();
         private readonly DispatcherTimer timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         private readonly List<ChartPoint> livePoints = new List<ChartPoint>();
@@ -57,6 +58,12 @@ namespace HeartRateMonitor
             FontFamily = new FontFamily("Segoe UI, Yu Gothic UI"); FontSize = 14;
             BuildUi();
             engine = new RecordingEngine(database, settings);
+            sleepMonitor = new OyasumiSleepMonitor(database, settings);
+            sleepMonitor.DataChanged += () => Ui(() => sleepHistoryDirty = true);
+            sleepMonitor.StatusChanged += status => {
+                connectionLog.Add("OyasumiVR: " + status.State + (status.Detail.Length == 0 ? "" : " / " + status.Detail));
+                Ui(UpdateSleepStatus);
+            };
             BindConnectionEvents();
             BindRecordingEvents();
             timer.Tick += (s, e) => Tick(); timer.Start();
@@ -66,6 +73,7 @@ namespace HeartRateMonitor
             Loaded += (s, e) => {
                 tray = new TrayHost(() => Ui(RestoreWindow), () => Ui(StartAutomatic), () => Ui(() => StopClicked(null, null)), () => Ui(ExitApplication));
                 if (!smokeTest && settings.AutoConnect) StartAutomatic();
+                if (!smokeTest) sleepMonitor.Start();
             };
             if (warning != null) { connectionLog.Add(warning); errorText.Text = warning; }
             Tick();
@@ -81,6 +89,7 @@ namespace HeartRateMonitor
         private void BeginShutdown()
         {
             closing = true; closingToken.Cancel(); scanCancellation?.Cancel(); timer.Stop(); historyDebounce.Stop();
+            _ = sleepMonitor.StopAsync();
             SystemEvents.UserPreferenceChanged -= SystemThemeChanged;
         }
         public void EndSession()
@@ -90,7 +99,7 @@ namespace HeartRateMonitor
             // Discovery continuations may need the UI dispatcher. Do not synchronously
             // wait for them during Windows session shutdown; only wait for independent disk work.
             _ = automatic.StopAsync(); _ = bluetooth.StopAsync();
-            try { Task.Run(() => Task.WhenAll(engine.StopAsync(), historyExport)).GetAwaiter().GetResult(); }
+            try { Task.Run(() => Task.WhenAll(engine.StopAsync(), sleepMonitor.StopAsync(), historyExport)).GetAwaiter().GetResult(); }
             catch (Exception ex) { connectionLog.Add("Session ending: " + ex.Message); }
             tray?.Dispose(); canClose = true;
         }
@@ -174,6 +183,10 @@ namespace HeartRateMonitor
         }
         private void Tick()
         {
+            UpdateSleepStatus();
+            if (sleepHistoryDirty && tabs.SelectedIndex == 1 && historyLoaded && !historyNavigator.IsInteracting) {
+                sleepHistoryDirty = false; _ = LoadHistory();
+            }
             if (!closing && tabs.SelectedIndex == 1 && DateTime.UtcNow >= activityRefreshAt) _ = RefreshActivity();
             liveSpanPicker?.Update(liveWidth, 3600000);
             for (int i = 0; i < livePresets.Count; i++) livePresets[i].IsChecked = liveWidth == livePresetWidths[i];
@@ -226,7 +239,7 @@ namespace HeartRateMonitor
             try { await historyExport; }
             catch (Exception ex) { connectionLog.Add("CSV shutdown: " + ex); }
             // Drain accepted readings even when a connection or discovery task failed to stop.
-            try { await engine.StopAsync(); }
+            try { await Task.WhenAll(engine.StopAsync(), sleepMonitor.StopAsync()); }
             catch (Exception ex) { connectionLog.Add("Recording shutdown: " + ex); }
             tray?.Dispose(); canClose = true;
             // Stop tasks can complete synchronously inside the original Closing event.

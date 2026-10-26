@@ -82,8 +82,11 @@ namespace HeartRateMonitor
                 action.Height = 40;
             }
             var retention = Label(RetentionNotice(settings.RetentionDays), 12); AutomationProperties.SetAutomationId(retention, "HistoryRetentionNotice");
+            sleepHistoryStatus = Label("", 11); sleepHistoryStatus.TextTrimming = TextTrimming.CharacterEllipsis; sleepHistoryStatus.TextWrapping = TextWrapping.NoWrap;
+            AutomationProperties.SetAutomationId(sleepHistoryStatus, "HistorySleepStatus");
+            UpdateSleepStatus();
             var csvActions = Horizontal(exportButton, analysisExportButton);
-            var footerActions = new DockPanel(); DockPanel.SetDock(csvActions, Dock.Right); footerActions.Children.Add(csvActions); footerActions.Children.Add(retention);
+            var footerActions = new DockPanel(); DockPanel.SetDock(csvActions, Dock.Right); footerActions.Children.Add(csvActions); footerActions.Children.Add(Stack(retention, sleepHistoryStatus));
             exportStatus.Margin = new Thickness(0, 4, 0, 0);
             var grid = new Grid(); grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); grid.RowDefinitions.Add(new RowDefinition()); grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             var activityCard = Card(activityCalendar, new Thickness(18)); activityCard.Margin = new Thickness(0, 0, 0, 10); grid.Children.Add(activityCard);

@@ -20,6 +20,8 @@ namespace HeartRateMonitor
                 Execute("PRAGMA synchronous=FULL;");
                 Execute("CREATE TABLE IF NOT EXISTS readings (id INTEGER PRIMARY KEY AUTOINCREMENT, utc_ms INTEGER NOT NULL, session TEXT NOT NULL, device TEXT NOT NULL, bpm INTEGER NOT NULL, contact INTEGER, rr_ms TEXT NOT NULL, energy INTEGER);");
                 Execute("CREATE INDEX IF NOT EXISTS readings_time ON readings(utc_ms);");
+                Execute("CREATE TABLE IF NOT EXISTS sleep_intervals (id INTEGER PRIMARY KEY AUTOINCREMENT, from_ms INTEGER NOT NULL, to_ms INTEGER NOT NULL CHECK(to_ms>=from_ms));");
+                Execute("CREATE INDEX IF NOT EXISTS sleep_intervals_end ON sleep_intervals(to_ms);");
             } catch { Dispose(); throw; }
         }
         // Keep related history queries consistent while other connections record or prune data.
@@ -57,14 +59,20 @@ namespace HeartRateMonitor
         }
         public int DeleteBefore(long utcMs)
         {
-            lock (gate) {
+            return ReadSnapshot(() => {
+                var prune = Prepare("DELETE FROM sleep_intervals WHERE to_ms<=?;");
+                try {
+                    BindInt(prune, 1, utcMs); int rc = Native.sqlite3_step(prune); if (rc != Native.Done) Check(rc);
+                    PrunedSleepIntervals = Native.sqlite3_changes(db);
+                }
+                finally { Native.sqlite3_finalize(prune); }
                 var s = Prepare("DELETE FROM readings WHERE utc_ms < ?;");
                 try {
                     BindInt(s, 1, utcMs);
                     int rc = Native.sqlite3_step(s); if (rc != Native.Done) Check(rc);
                     return Native.sqlite3_changes(db);
                 } finally { Native.sqlite3_finalize(s); }
-            }
+            });
         }
         private Reading Row(IntPtr s) => new Reading {
             Id = Native.sqlite3_column_int64(s, 0), UnixMs = Native.sqlite3_column_int64(s, 1),

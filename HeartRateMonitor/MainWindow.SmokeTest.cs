@@ -120,6 +120,8 @@ namespace HeartRateMonitor
                             NavigateSettings(0);
                         }
                         if (i == 1) {
+                            await VerifySleepLabels();
+                            capture($"sleep-labels-{language}-{mode.ToLowerInvariant()}");
                             if (analysisExportButton.IsEnabled)
                                 throw new InvalidOperationException("Analysis export must be disabled without a selection.");
                             if (historyData != null) {
@@ -157,5 +159,6 @@ namespace HeartRateMonitor
                 ExitApplication();
             };
         }
+
     }
 }

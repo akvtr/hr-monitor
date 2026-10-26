@@ -25,7 +25,7 @@ namespace HeartRateMonitor
         internal HistoryDetail LoadWindow(TimeWindow range)
         {
             using (var store = new Store(database))
-                return store.ReadSnapshot(() => new HistoryDetail(store.Summary(range.From, range.To), store.Chart(range.From, range.To)));
+                return store.ReadSnapshot(() => new HistoryDetail(store.Summary(range.From, range.To), store.Chart(range.From, range.To), store.SleepIntervals(range.From, range.To)));
         }
 
         internal HistorySummary Summarize(TimeWindow range)
@@ -59,8 +59,9 @@ namespace HeartRateMonitor
     {
         internal HistorySummary Summary { get; }
         internal List<ChartPoint> Points { get; }
+        internal List<SleepInterval> SleepIntervals { get; }
 
-        internal HistoryDetail(HistorySummary summary, List<ChartPoint> points)
-        { Summary = summary; Points = points; }
+        internal HistoryDetail(HistorySummary summary, List<ChartPoint> points, List<SleepInterval> sleepIntervals = null)
+        { Summary = summary; Points = points; SleepIntervals = sleepIntervals ?? new List<SleepInterval>(); }
     }
 }

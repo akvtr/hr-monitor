@@ -24,6 +24,9 @@ namespace HeartRateMonitor
         public string Theme { get; set; } = "System";
         public string Language { get; set; } = "ja";
         public bool CloseToTray { get; set; } = true;
+        public bool OyasumiEnabled { get; set; } = true;
+        // Zero automatically finds local listeners owned by OyasumiVR.
+        public int OyasumiQueryPort { get; set; } = 0;
         // Zero means unlimited; absent fields in older settings also default to unlimited.
         public int RetentionDays { get; set; } = 0;
         internal static readonly int[] RetentionDayOptions = { 0, 1, 7, 30, 90, 365 };
@@ -47,6 +50,8 @@ namespace HeartRateMonitor
         }
         public void Validate()
         {
+            if (OyasumiQueryPort < 0 || OyasumiQueryPort > 65535)
+                throw new ArgumentException(Words.T("OyasumiVRのOSCQueryポートは0〜65535で指定してください（0は自動検出）。", "OyasumiVR OSCQuery port must be 0–65535 (0 for automatic discovery)."));
             if (LastAddress > 0xFFFFFFFFFFFFUL) throw new ArgumentException(Words.T("前回のBluetoothアドレスが不正です。", "The saved Bluetooth address must fit 48 bits."));
             if (LastAddressType != -1 && !Enum.IsDefined(typeof(BluetoothAddressType), LastAddressType))
                 throw new ArgumentException(Words.T("前回のBluetoothアドレス種別が不正です。", "The saved Bluetooth address type is invalid."));

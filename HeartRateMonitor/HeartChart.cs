@@ -11,6 +11,7 @@ namespace HeartRateMonitor
     public sealed partial class HeartChart : FrameworkElement
     {
         public List<ChartPoint> Points = new List<ChartPoint>();
+        public List<SleepInterval> SleepIntervals = new List<SleepInterval>();
         public long From;
         public long To;
         public long GapMs = 15000;
@@ -52,6 +53,7 @@ namespace HeartRateMonitor
             Func<long, double> x = t => left + (t - From) / (double)Math.Max(1, To - From) * width;
             Func<double, double> y = v => top + (max - v) / (max - min) * height;
             var grid = FrozenPen(TryFindResource("ChartGrid") as Brush ?? Brushes.LightGray, 0.7);
+            DrawSleepIntervals(dc, left, top, width, height);
             for (int i = 0; i <= 4; i++) {
                 double value = min + (max - min) * i / 4;
                 dc.DrawLine(grid, new Point(left, y(value)), new Point(left + width, y(value)));

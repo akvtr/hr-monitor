@@ -38,6 +38,12 @@ namespace HeartRateMonitor
             autoConnect = Check(T("起動時に自動接続する", "Connect automatically on startup"), settings.AutoConnect);
             autoReconnect = Check(T("切断時に自動再接続する", "Reconnect after disconnection"), settings.AutoReconnect);
             closeToTray = Check(T("閉じるボタンでタスクトレイに格納", "Keep running in the tray when closed"), settings.CloseToTray);
+            oyasumiEnabled = Check(T("OyasumiVRの睡眠モードで睡眠ラベルを自動記録", "Record sleep labels from OyasumiVR sleep mode"), settings.OyasumiEnabled);
+            oyasumiPort = Input(settings.OyasumiQueryPort.ToString());
+            AutomationProperties.SetAutomationId(oyasumiEnabled, "OyasumiEnabled");
+            AutomationProperties.SetAutomationId(oyasumiPort, "OyasumiQueryPort");
+            sleepSettingsStatus = Label("", 12); AutomationProperties.SetAutomationId(sleepSettingsStatus, "OyasumiStatus");
+            AutomationProperties.SetLiveSetting(sleepSettingsStatus, AutomationLiveSetting.Polite);
             themeChoice = Choice(new[] { T("Windowsに合わせる", "Follow Windows"), T("ダーク", "Dark"), T("ライト", "Light") }, settings.Theme == "Dark" ? 1 : settings.Theme == "Light" ? 2 : 0, 210);
             languageChoice = Choice(new[] { "日本語", "English" }, settings.Language == "en" ? 1 : 0, 210);
             AutomationProperties.SetAutomationId(languageChoice, "LanguageChoice"); AutomationProperties.SetAutomationId(themeChoice, "ThemeChoice");
@@ -51,7 +57,7 @@ namespace HeartRateMonitor
                 int days = Settings.RetentionDayOptions[index];
                 retentionHelp.Visibility = days == 0 ? Visibility.Collapsed : Visibility.Visible;
                 retentionHelp.Text = days == 0 ? "" :
-                    T($"保存すると、現在時刻から{days}日より古い記録を自動削除します。既存の記録も対象になり、復元・CSV出力できません。必要な記録は変更前に書き出してください。", $"After saving, recordings older than {days} days are deleted automatically, including existing recordings. Deleted data cannot be recovered or exported. Export anything you need before changing this setting.");
+                    T($"保存すると、{days}日より古い記録と、終了日時が期限以前の睡眠ラベルを自動削除します。既存データも対象で復元できません。必要なデータは変更前にバックアップしてください。", $"After saving, recordings older than {days} days and sleep labels ending at or before the cutoff are deleted automatically, including existing data. Deletion is irreversible. Back up needed data first.");
                 retentionHelp.SetResourceReference(TextBlock.ForegroundProperty, days == 0 ? "TextMuted" : "Warning");
             };
             retentionChoice.SelectionChanged += (s, e) => updateRetentionHelp(); updateRetentionHelp();
@@ -68,7 +74,10 @@ namespace HeartRateMonitor
                 Field(T("無受信時間（1〜3600秒）", "Receive timeout (1–3600 seconds)"), oscTimeoutSeconds));
             var appearanceSection = Stack(Heading(T("外観と言語", "Appearance & language")), Field(T("テーマ", "Theme"), themeChoice), new Border { Height = 16 }, Field(T("表示言語", "Language"), languageChoice));
             var storageLocation = Label(folder, 11, "TextMuted"); storageLocation.Margin = new Thickness(0, 4, 0, 0);
-            var behaviorSection = Stack(Heading(T("接続と常駐", "Connection & tray")), autoConnect, autoReconnect, closeToTray);
+            var behaviorSection = Stack(Heading(T("接続と常駐", "Connection & tray")), autoConnect, autoReconnect, closeToTray,
+                new Border { Height = 12 }, Heading("OyasumiVR"), oyasumiEnabled,
+                Field(T("OSCQueryポート（0で自動検出）", "OSCQuery port (0 for automatic discovery)"), oyasumiPort),
+                Label(T("同じPCのOyasumiVRでOSCを有効にしてください。2秒ごとに確認し、取得不能な間は睡眠に含めません。", "Enable OSC in OyasumiVR on this PC. Checks every 2 seconds; unavailable periods are excluded."), 12), sleepSettingsStatus);
             var storageSection = Stack(Heading(T("データ保存", "Data storage")), Field(T("保存期間", "Retention period"), retentionChoice), retentionHelp,
                 new Border { Height = 18 }, Label(T("データ保存先", "Data location"), 12, "Text"), storageLocation);
             var sections = new Grid { VerticalAlignment = VerticalAlignment.Top };
@@ -113,7 +122,10 @@ namespace HeartRateMonitor
                 next.Theme = new[] { "System", "Dark", "Light" }[themeChoice.SelectedIndex]; next.Language = languageChoice.SelectedIndex == 1 ? "en" : "ja";
                 if (retentionChoice.SelectedIndex < 0) throw new ArgumentException(T("保存期間を選択してください。", "Choose a retention period."));
                 next.RetentionDays = Settings.RetentionDayOptions[retentionChoice.SelectedIndex];
-                next.Validate(); next.Save(settingsPath); settings = next; engine.Configure(next); Words.Language = next.Language;
+                next.OyasumiEnabled = oyasumiEnabled.IsChecked == true;
+                if (!int.TryParse(oyasumiPort.Text, out value)) throw new ArgumentException(T("OSCQueryポートは整数で入力してください。", "OSCQuery port must be an integer."));
+                next.OyasumiQueryPort = value;
+                next.Validate(); next.Save(settingsPath); settings = next; engine.Configure(next); sleepMonitor.Configure(next); Words.Language = next.Language;
                 BuildUi(); ApplyThemeTransition(true); tray?.Refresh(); Tick(); settingsStatus.Text = T("設定を保存・適用しました。", "Settings saved and applied.");
             } catch (Exception ex) { settingsStatus.Text = T("保存できません: ", "Could not save: ") + ex.Message; }
         }
