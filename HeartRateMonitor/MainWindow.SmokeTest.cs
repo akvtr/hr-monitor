@@ -120,6 +120,29 @@ namespace HeartRateMonitor
                             NavigateSettings(0);
                         }
                         if (i == 1) {
+                            if (analysisExportButton.IsEnabled)
+                                throw new InvalidOperationException("Analysis export must be disabled without a selection.");
+                            if (historyData != null) {
+                                var select = typeof(HeartChart).GetMethod("SetSelectionRange", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+                                select.Invoke(historyChart, new object[] { new TimeWindow(historyWindow.From, historyWindow.From + Math.Max(1, historyWidth / 2)) });
+                                if (!analysisExportButton.IsEnabled || !exportButton.IsEnabled)
+                                    throw new InvalidOperationException("Both CSV actions must be available for a loaded selected interval.");
+                                exportingHistory = true; UpdateExportButtons();
+                                if (analysisExportButton.IsEnabled || exportButton.IsEnabled)
+                                    throw new InvalidOperationException("Both CSV actions must be disabled during export.");
+                                exportingHistory = false; UpdateExportButtons();
+                                await Task.Delay(150); UpdateLayout();
+                                capture($"smoke-{language}-{mode.ToLowerInvariant()}-analysis-export");
+                                historyChart.ClearSelection();
+                                if (analysisExportButton.IsEnabled || !exportButton.IsEnabled)
+                                    throw new InvalidOperationException("Clearing analysis must disable only interval export.");
+                                select.Invoke(historyChart, new object[] { new TimeWindow(historyWindow.From, historyWindow.From + 1) });
+                                ScheduleHistory();
+                                if (analysisExportButton.IsEnabled || exportButton.IsEnabled)
+                                    throw new InvalidOperationException("Changing displayed range must clear analysis and disable CSV while loading.");
+                                await LoadHistory();
+                                File.AppendAllText(checksPath, $"PASS {language}/{mode}: analysis CSV selection, clearing, range change and export busy states.{Environment.NewLine}");
+                            }
                             // Isolated smoke mode only: exercise the tightest layout
                             // with errors and a long export path.
                             errorText.Text = string.Concat(Enumerable.Repeat(T("検証用の接続エラー。", "Isolated connection-error verification. "), 12));

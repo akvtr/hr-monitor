@@ -17,7 +17,7 @@ namespace HeartRateMonitor
         private static readonly long[] historyPresetWidths = { 600000, 1800000, 3600000, 21600000, 86400000 };
         private List<ChartPoint> historyPreview = new List<ChartPoint>(), historyOverview = new List<ChartPoint>();
         private TextBlock historyStats, historyRange, historyBounds, historyFirst, historyLast, historyPosition, exportStatus;
-        private Button exportButton, historyBack, historyForward;
+        private Button exportButton, analysisExportButton, historyBack, historyForward;
         private TimeWindow historyData, historyWindow;
         private TimeWindow calendarDay;
         private long historyWidth = 600000;
@@ -94,7 +94,7 @@ namespace HeartRateMonitor
             historyWidth = historyWindow.To - historyWindow.From;
             SynchronizeHistoryControls(domain);
             UpdateHistoryLabels(domain);
-            historyLoaded = false; exportButton.IsEnabled = false;
+            historyLoaded = false; UpdateExportButtons();
             historyStats.Text = historyNavigator.IsInteracting ? T("範囲を調整中 · グラフは概要表示", "Adjusting range · chart preview") : T("読み込み中…", "Loading…");
             historyChart.Average = null;
             historyChart.Points = HistorySelection.Preview(historyPreview, historyWindow); historyChart.From = historyWindow.From; historyChart.To = historyWindow.To;
@@ -138,23 +138,36 @@ namespace HeartRateMonitor
                 historyChart.Average = summary.Count > 0 ? (double?)summary.Average : null;
                 historyStats.Text = summary.Count == 0 ? T("この期間に有効な心拍データはありません。", "No valid heart-rate samples in this window.") : T($"{summary.Count:N0} 件 · 最小 {summary.Min}   平均 {summary.Average:0.0}   最大 {summary.Max} bpm", $"{summary.Count:N0} samples · Min {summary.Min}   Avg {summary.Average:0.0}   Max {summary.Max} bpm");
                 historyChart.Points = result.Points; historyChart.From = range.From; historyChart.To = range.To; historyChart.GapMs = Math.Max(15000, (range.To - range.From) / 400 * 2); historyChart.InvalidateVisual();
-                historyLoaded = true; exportButton.IsEnabled = historyData != null && !exportingHistory;
+                historyLoaded = true; UpdateExportButtons();
             } catch (Exception ex) { if (revision == historyRevision) historyStats.Text = T("読込エラー: ", "Read failed: ") + ex.Message; }
         }
-        private async void ExportClicked(object sender, RoutedEventArgs e)
+        private void UpdateExportButtons()
         {
-            if (historyWindow == null || !historyLoaded || exportingHistory) return;
-            var range = historyWindow;
+            bool ready = historyLoaded && historyData != null && !exportingHistory;
+            if (exportButton != null) exportButton.IsEnabled = ready;
+            if (analysisExportButton != null) analysisExportButton.IsEnabled = ready && historyChart.SelectedRange != null;
+        }
+        private async void ExportClicked(object sender, RoutedEventArgs e) => await ExportHistory(false);
+        private async void AnalysisExportClicked(object sender, RoutedEventArgs e) => await ExportHistory(true);
+        private async Task ExportHistory(bool analysis)
+        {
+            if (historyWindow == null || !historyLoaded || exportingHistory || historyData == null) return;
+            var range = analysis ? historyChart.SelectedRange : historyWindow;
+            if (range == null) return;
             try {
-                var dialog = new SaveFileDialog { FileName = "heartrate-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".csv", Filter = "CSV (*.csv)|*.csv", AddExtension = true, DefaultExt = ".csv" };
+                var dialog = new SaveFileDialog {
+                    Title = analysis ? T("分析区間をCSV出力", "Export analysis interval to CSV") : T("表示期間をCSV出力", "Export displayed range to CSV"),
+                    FileName = (analysis ? "heartrate-interval-" : "heartrate-") + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".csv",
+                    Filter = "CSV (*.csv)|*.csv", AddExtension = true, DefaultExt = ".csv"
+                };
                 if (dialog.ShowDialog(this) != true || closing) return;
-                exportingHistory = true; exportButton.IsEnabled = false; exportStatus.Text = T("CSVを書き出し中…", "Exporting CSV…");
+                exportingHistory = true; UpdateExportButtons(); exportStatus.Text = T("CSVを書き出し中…", "Exporting CSV…");
                 var export = Task.Run(() => history.Export(dialog.FileName, range));
                 historyExport = export;
                 var count = await export;
                 exportStatus.Text = T($"{count:N0}件を書き出しました: ", $"Exported {count:N0} samples: ") + dialog.FileName;
             } catch (Exception ex) { exportStatus.Text = T("書き出しエラー: ", "Export failed: ") + ex.Message; }
-            finally { historyExport = Task.CompletedTask; exportingHistory = false; exportButton.IsEnabled = historyLoaded && historyData != null; }
+            finally { historyExport = Task.CompletedTask; exportingHistory = false; UpdateExportButtons(); }
         }
     }
 }

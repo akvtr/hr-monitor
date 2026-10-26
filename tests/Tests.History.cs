@@ -289,6 +289,13 @@ internal static partial class Tests
         string csv = Path.Combine(folder, "repository-export.csv");
         Check(history.Export(csv, range) == 4 && File.ReadAllLines(csv).Length == 5,
             "history CSV retains invalid samples while respecting the displayed interval");
+        string intervalCsv = Path.Combine(folder, "analysis-export.csv");
+        Check(history.Export(intervalCsv, new TimeWindow(2000, 3000)) == 2,
+            "analysis CSV includes its start and no-contact samples but excludes its end");
+        var fullLines = File.ReadAllLines(csv);
+        var intervalLines = File.ReadAllLines(intervalCsv);
+        Check(intervalLines.SequenceEqual(new[] { fullLines[0], fullLines[2], fullLines[3] }),
+            "analysis CSV preserves the displayed export schema and original rows");
         Throws(() => history.Export(folder, range), "history export reports an inaccessible output target");
         Check(history.LoadWindow(range).Summary.Count == 2, "history queries remain usable after export failure");
         using (var store = new Store(database)) store.DeleteBefore(4000);

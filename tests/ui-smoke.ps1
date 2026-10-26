@@ -128,7 +128,7 @@ try {
             $condition = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::AutomationIdProperty, $removed)
             if ($viewport.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)) { throw ('Date/time jump remains: ' + $removed) }
         }
-        foreach ($id in @('HistorySelection','HistoryScale0','HistoryScale5','HistorySpanSlider','HistoryVisibleRange','HistorySummary','HistoryPrevious','HistoryNext','HistoryLatest','HistoryExport','HistoryRetentionNotice')) {
+        foreach ($id in @('HistorySelection','HistoryScale0','HistoryScale5','HistorySpanSlider','HistoryVisibleRange','HistorySummary','HistoryPrevious','HistoryNext','HistoryLatest','HistoryExport','HistoryAnalysisExport','HistoryRetentionNotice')) {
             $control = Find-Control $id
             $rect = $control.Current.BoundingRectangle
             if ($rect.IsEmpty -or $rect.Width -le 0 -or $rect.Height -le 0 -or $rect.Left -lt $bounds.Left - 1 -or $rect.Top -lt $bounds.Top - 1 -or $rect.Right -gt $bounds.Right + 1 -or $rect.Bottom -gt $bounds.Bottom + 1) { throw ('History control does not fit: ' + $id + ' ' + $rect + ' within ' + $bounds) }

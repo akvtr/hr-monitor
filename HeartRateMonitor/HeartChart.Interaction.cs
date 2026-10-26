@@ -16,6 +16,7 @@ namespace HeartRateMonitor
         public int SelectionRevision { get; private set; }
         public event Action<double, int> ZoomRequested;
         public event Action<TimeWindow> AnalysisRequested;
+        public event Action SelectionChanged;
         private readonly DispatcherTimer analysisDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
         private TimeWindow dragView;
         private Point dragOrigin;
@@ -56,6 +57,7 @@ namespace HeartRateMonitor
         private void SetSelectionRange(TimeWindow range)
         {
             SelectedRange = range; SelectedSummary = null; selectionError = null; SelectionRevision++;
+            SelectionChanged?.Invoke();
             analysisDebounce.Stop(); if (range != null) analysisDebounce.Start();
             AutomationProperties.SetHelpText(this, range == null
                 ? Words.T("Ctrl＋ホイールで拡大・縮小。ドラッグで区間を選択。Esc・右クリックで選択解除。", "Ctrl+wheel to zoom. Drag to select an interval. Escape or right-click clears it.")

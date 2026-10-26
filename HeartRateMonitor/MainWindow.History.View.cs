@@ -74,12 +74,16 @@ namespace HeartRateMonitor
 
             exportButton = Button(T("表示期間をCSV出力", "Export range to CSV"), ExportClicked, primary: true, id: "HistoryExport", width: 196); exportButton.Margin = new Thickness(16, 0, 0, 0); exportButton.IsEnabled = false;
             exportButton.ToolTip = T("表示期間に含まれる全測定値を書き出します。", "Exports every sample in the displayed range.");
-            foreach (var action in new[] { latest, historyBack, historyForward, exportButton }) {
+            analysisExportButton = Button(T("分析区間をCSV出力", "Export interval to CSV"), AnalysisExportClicked, id: "HistoryAnalysisExport", width: 196);
+            analysisExportButton.Margin = new Thickness(12, 0, 0, 0); analysisExportButton.IsEnabled = false;
+            analysisExportButton.ToolTip = T("グラフでドラッグして区間を選択すると、その区間の全測定値を書き出せます。", "Drag on the chart to select an analysis interval, then export every sample in that interval.");
+            foreach (var action in new[] { latest, historyBack, historyForward, exportButton, analysisExportButton }) {
                 action.Style = (Style)FindResource("ConnectionAction");
                 action.Height = 40;
             }
             var retention = Label(RetentionNotice(settings.RetentionDays), 12); AutomationProperties.SetAutomationId(retention, "HistoryRetentionNotice");
-            var footerActions = new DockPanel(); DockPanel.SetDock(exportButton, Dock.Right); footerActions.Children.Add(exportButton); footerActions.Children.Add(retention);
+            var csvActions = Horizontal(exportButton, analysisExportButton);
+            var footerActions = new DockPanel(); DockPanel.SetDock(csvActions, Dock.Right); footerActions.Children.Add(csvActions); footerActions.Children.Add(retention);
             exportStatus.Margin = new Thickness(0, 4, 0, 0);
             var grid = new Grid(); grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); grid.RowDefinitions.Add(new RowDefinition()); grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             var activityCard = Card(activityCalendar, new Thickness(18)); activityCard.Margin = new Thickness(0, 0, 0, 10); grid.Children.Add(activityCard);
