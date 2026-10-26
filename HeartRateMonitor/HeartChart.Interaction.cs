@@ -35,7 +35,7 @@ namespace HeartRateMonitor
             };
             MouseLeftButtonDown += (s, e) => {
                 var point = e.GetPosition(this);
-                if (!RangeSelectionEnabled || To <= From || point.X < 42 || point.X > ActualWidth - 18 || point.Y < 18 || point.Y > ActualHeight - 52) return;
+                if (!RangeSelectionEnabled || To <= From || point.X < 42 || point.X > ActualWidth - 18 || point.Y < 18 || point.Y > PlotBottom) return;
                 Focus(); selecting = true; selectionMoved = false; dragOrigin = point; dragView = new TimeWindow(From, To);
                 CaptureMouse(); e.Handled = true;
             };
@@ -137,12 +137,12 @@ namespace HeartRateMonitor
                 CultureInfo.CurrentCulture, FlowDirection.LeftToRight, new Typeface("Bahnschrift, Segoe UI"), 13, accent, VisualTreeHelper.GetDpi(this).PixelsPerDip);
             var startTag = timeTag(SelectedRange.From); var endTag = timeTag(SelectedRange.To);
             if (b - a >= startTag.Width + endTag.Width + 16) {
-                dc.DrawText(startTag, new Point(a, top + height + 34)); dc.DrawText(endTag, new Point(b - endTag.Width, top + height + 34));
+                dc.DrawText(startTag, new Point(a, top + height + (ShowDateLabels ? 52 : 34))); dc.DrawText(endTag, new Point(b - endTag.Width, top + height + (ShowDateLabels ? 52 : 34)));
             } else {
                 var pair = new FormattedText(DateTimeOffset.FromUnixTimeMilliseconds(SelectedRange.From).LocalDateTime.ToString("HH:mm:ss") + " — " +
                     DateTimeOffset.FromUnixTimeMilliseconds(SelectedRange.To).LocalDateTime.ToString("HH:mm:ss"), CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
                     new Typeface("Bahnschrift, Segoe UI"), 13, accent, VisualTreeHelper.GetDpi(this).PixelsPerDip);
-                dc.DrawText(pair, new Point(Math.Max(left, Math.Min(left + width - pair.Width, (a + b - pair.Width) / 2)), top + height + 34));
+                dc.DrawText(pair, new Point(Math.Max(left, Math.Min(left + width - pair.Width, (a + b - pair.Width) / 2)), top + height + (ShowDateLabels ? 52 : 34)));
             }
         }
     }

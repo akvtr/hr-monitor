@@ -7,6 +7,7 @@ namespace HeartRateMonitor
     {
         private void ConfigureChartInteraction(HeartChart chart, bool isHistory)
         {
+            chart.ShowDateLabels = isHistory;
             chart.RangeSelectionEnabled = true; chart.ClearSelection();
             if (isHistory) {
                 chart.SelectionChanged += UpdateExportButtons;

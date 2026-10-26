@@ -16,6 +16,8 @@ namespace HeartRateMonitor
         public long To;
         public long GapMs = 15000;
         public double? Average;
+        public bool ShowDateLabels;
+        private double PlotBottom => ActualHeight - (ShowDateLabels ? 72 : 52);
         private Point pointer;
         private bool pointerInside;
         private Brush ink => TryFindResource("TextMuted") as Brush ?? Brushes.Gray;
@@ -45,7 +47,7 @@ namespace HeartRateMonitor
             // Make empty areas part of the hit-test surface. Without a background
             // drawing WPF only raises mouse events over the visible grid/data lines.
             dc.DrawRectangle(Brushes.Transparent, null, new Rect(new Point(0, 0), RenderSize));
-            double left = 42, top = 18, width = ActualWidth - 60, height = ActualHeight - 70;
+            double left = 42, top = 18, width = ActualWidth - 60, height = PlotBottom - top;
             if (width < 10 || height < 10) return;
             var valid = Points.Where(p => p.UnixMs >= From && p.UnixMs <= To).ToList();
             double min = valid.Count == 0 ? 40 : Math.Max(0, Math.Floor((valid.Min(p => p.Min) - 10) / 20) * 20);
@@ -61,9 +63,15 @@ namespace HeartRateMonitor
             }
             foreach (long t in ChartTime.Ticks(From, To, width)) {
                 dc.DrawLine(grid, new Point(x(t), top), new Point(x(t), top + height + 5));
-                var time = new FormattedText(ChartTime.Label(t, To - From), CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
+                string label = ChartTime.Label(t, To - From, ShowDateLabels);
+                var time = new FormattedText(label, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
                     new Typeface(new FontFamily("Bahnschrift, Segoe UI"), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal), 14,
                     TryFindResource("Text") as Brush ?? Brushes.Black, VisualTreeHelper.GetDpi(this).PixelsPerDip);
+                if (ShowDateLabels) {
+                    int dateStart = label.IndexOf('\n') + 1;
+                    time.SetFontSize(11, dateStart, label.Length - dateStart);
+                    time.SetFontWeight(FontWeights.Normal, dateStart, label.Length - dateStart);
+                }
                 dc.DrawText(time, new Point(Math.Max(left, Math.Min(left + width - time.Width, x(t) - time.Width / 2)), top + height + 10));
             }
             if (valid.Count == 0) { Text(dc, Words.T("この期間にデータはありません", "No samples in this window"), left + 18, top + height / 2 - 8); DrawSelection(dc, left, top, width, height, min, max); return; }

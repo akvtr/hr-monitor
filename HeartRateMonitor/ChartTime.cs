@@ -31,7 +31,12 @@ namespace HeartRateMonitor
             }
             ticks.Add(to); return ticks;
         }
-        public static string Label(long time, long span) => DateTimeOffset.FromUnixTimeMilliseconds(time).LocalDateTime.ToString(span <= 1200000 ? "HH:mm:ss" : "HH:mm");
+        public static string Label(long time, long span, bool includeDate = false)
+        {
+            var local = DateTimeOffset.FromUnixTimeMilliseconds(time).LocalDateTime;
+            string label = local.ToString(span <= 1200000 ? "HH:mm:ss" : "HH:mm");
+            return includeDate ? label + "\n" + local.ToString("yyyy/MM/dd", CultureInfo.InvariantCulture) : label;
+        }
         public static string Duration(long milliseconds)
         {
             long hours = milliseconds / 3600000, minutes = milliseconds / 60000 % 60;
