@@ -117,6 +117,31 @@ try {
         (Find-Control 'Tab1').GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
         Start-Sleep -Milliseconds 400
     }
+    (Find-Control 'HistoryJumpDate').GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue('2020/02/29')
+    (Find-Control 'HistoryJumpTime').GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue('21:30:15')
+    (Find-Control 'HistoryJump').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+    Start-Sleep -Milliseconds 500
+    if ((Find-Control 'HistoryVisibleRange').Current.Name -notmatch '21:30:15') { throw 'Date/time jump did not start at the requested time.' }
+    if ((Find-Control 'HistorySummary').Current.Name -notmatch 'ありません|No valid') { throw 'Empty historical date did not show an empty state.' }
+    (Find-Control 'ActivityDay20200229').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+    Start-Sleep -Milliseconds 300
+    if ((Find-Control 'HistoryVisibleRange').Current.Name -notmatch '00:00:00') { throw 'Selecting a calendar day did not display the whole day.' }
+    (Find-Control 'ActivityPreviousMonth').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+    Start-Sleep -Milliseconds 400
+    [void](Find-Control 'ActivityDay20200131')
+    (Find-Control 'ActivityNextMonth').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+    Start-Sleep -Milliseconds 400
+    [void](Find-Control 'ActivityDay20200229')
+    $validRange = (Find-Control 'HistoryVisibleRange').Current.Name
+    (Find-Control 'HistoryJumpDate').GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue('2020/02/30')
+    (Find-Control 'HistoryJump').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+    Start-Sleep -Milliseconds 150
+    if ((Find-Control 'HistoryVisibleRange').Current.Name -ne $validRange -or !(Find-Control 'HistoryJumpStatus').Current.Name) { throw 'Invalid date did not preserve the current range and show an error.' }
+    (Find-Control 'HistoryLatest').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+    Start-Sleep -Milliseconds 400
+    (Find-Control 'HistoryScale0').GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
+    Start-Sleep -Milliseconds 250
+    Write-Output 'PASS monthly calendar, leap day, old and empty dates, direct time jump and invalid input'
     function Assert-HistoryFits {
         $viewport = $window
         $bounds = $viewport.Current.BoundingRectangle
@@ -124,11 +149,7 @@ try {
         foreach ($scrollbar in $viewport.FindAll([System.Windows.Automation.TreeScope]::Descendants, $scrollCondition)) {
             if (!$scrollbar.Current.IsOffscreen) { throw 'History contains a visible scrollbar.' }
         }
-        foreach ($removed in @('HistoryExactTime','HistoryJumpDate','HistoryJump')) {
-            $condition = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::AutomationIdProperty, $removed)
-            if ($viewport.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)) { throw ('Date/time jump remains: ' + $removed) }
-        }
-        foreach ($id in @('HistorySelection','HistoryScale0','HistoryScale5','HistorySpanSlider','HistoryVisibleRange','HistorySummary','HistoryPrevious','HistoryNext','HistoryLatest','HistoryExport','HistoryAnalysisExport','HistoryRetentionNotice')) {
+        foreach ($id in @('ActivityPreviousMonth','ActivityNextMonth','ActivityThisMonth','HistoryJumpDate','HistoryJumpTime','HistoryJump','HistorySelection','HistoryScale0','HistoryScale5','HistorySpanSlider','HistoryVisibleRange','HistorySummary','HistoryPrevious','HistoryNext','HistoryLatest','HistoryExport','HistoryAnalysisExport','HistoryRetentionNotice')) {
             $control = Find-Control $id
             $rect = $control.Current.BoundingRectangle
             if ($rect.IsEmpty -or $rect.Width -le 0 -or $rect.Height -le 0 -or $rect.Left -lt $bounds.Left - 1 -or $rect.Top -lt $bounds.Top - 1 -or $rect.Right -gt $bounds.Right + 1 -or $rect.Bottom -gt $bounds.Bottom + 1) { throw ('History control does not fit: ' + $id + ' ' + $rect + ' within ' + $bounds) }
@@ -144,7 +165,7 @@ try {
     Assert-HistoryFits
     (Find-Control 'ChooseSensor').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
     $transform.Resize(1200,880)
-    Write-Output 'PASS history fits without scrollbars or date/time jump, including compact layout and connection details'
+    Write-Output 'PASS history calendar and date/time controls fit without scrollbars, including compact layout and connection details'
     $dataGridCondition = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::DataGrid)
     if ($window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $dataGridCondition)) { throw 'A received readings table remains visible.' }
     Write-Output 'PASS history has no received readings table'

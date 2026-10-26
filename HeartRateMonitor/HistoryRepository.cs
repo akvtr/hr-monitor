@@ -39,10 +39,12 @@ namespace HeartRateMonitor
                 return store.ReadSnapshot(() => new HistorySleepWindow(store.HistoryBounds(), store.SleepIntervals(range.From, range.To)));
         }
 
-        internal List<DailyActivity> LoadActivity(DateTime today, TimeZoneInfo zone)
+        internal List<DailyActivity> LoadActivity(DateTime month, TimeZoneInfo zone)
         {
+            var first = new DateTime(month.Year, month.Month, 1);
+            var last = first.AddMonths(1).AddDays(-1);
             using (var store = new Store(database))
-                return store.ReadSnapshot(() => store.DailyActivity(today.Date.AddDays(-364), today.Date, zone));
+                return store.ReadSnapshot(() => store.DailyActivity(first, last, zone));
         }
 
         internal long Export(string path, TimeWindow range)

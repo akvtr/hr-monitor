@@ -30,12 +30,12 @@ namespace HeartRateMonitor
         private bool activityLoading;
         private bool settingHistory, historyTimerAttached, historyLoaded, exportingHistory, historyRefreshPending;
         private Task historyExport = Task.CompletedTask;
-        private async Task RefreshActivity()
+        private async Task RefreshActivity(bool force = false)
         {
-            if (activityLoading || activityCalendar == null) return;
-            activityLoading = true; int revision = ++activityRevision; var today = DateTime.Today;
+            if ((activityLoading && !force) || activityCalendar == null) return;
+            activityLoading = true; int revision = ++activityRevision; var month = activityCalendar.Month;
             try {
-                var activity = await Task.Run(() => history.LoadActivity(today, TimeZoneInfo.Local));
+                var activity = await Task.Run(() => history.LoadActivity(month, TimeZoneInfo.Local));
                 if (revision != activityRevision || closing) return;
                 activityCalendar.SetDays(activity);
             } catch (Exception ex) { if (revision == activityRevision && !closing) activityCalendar.SetError(ex.Message); }
@@ -54,8 +54,10 @@ namespace HeartRateMonitor
                 if (historyNavigator.IsInteracting) { historyRefreshPending = true; return; }
                 historyData = snapshot.Bounds; historyPreview = snapshot.Preview; historyOverview = snapshot.Overview;
                 var domain = HistoryDomain();
-                if ((latestWindow && selectionRevision == historyRevision) || historyWindow == null)
+                if ((latestWindow && selectionRevision == historyRevision) || historyWindow == null) {
                     historyWindow = new TimeWindow(domain.To - historyWidth, domain.To);
+                    activityCalendar.SetMonth(DateTimeOffset.FromUnixTimeMilliseconds(historyWindow.From).LocalDateTime);
+                }
                 historyWindow = HistorySelection.Clamp(domain, historyWindow);
                 historyWidth = historyWindow.To - historyWindow.From;
                 historyNavigator.SetData(domain, historyOverview, historyWindow, historyData != null);
@@ -116,6 +118,12 @@ namespace HeartRateMonitor
         {
             var start = DateTimeOffset.FromUnixTimeMilliseconds(historyWindow.From).LocalDateTime;
             var end = DateTimeOffset.FromUnixTimeMilliseconds(historyWindow.To).LocalDateTime;
+            activityCalendar.SetSelectedDate(start);
+            if (historyDateInput != null && !historyDateInput.IsKeyboardFocused && !historyTimeInput.IsKeyboardFocused) {
+                historyDateInput.Text = start.ToString("yyyy/MM/dd", System.Globalization.CultureInfo.InvariantCulture);
+                historyTimeInput.Text = start.ToString("HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
+            }
+            if (historyJumpStatus != null) historyJumpStatus.Text = "";
             historyRange.Text = start.ToString("HH:mm:ss") + "  —  " + end.ToString("HH:mm:ss");
             historyBounds.Text = start.Date == end.Date ? start.ToString("yyyy/MM/dd (ddd)") : start.ToString("yyyy/MM/dd") + "  →  " + end.ToString("yyyy/MM/dd");
             historyRange.ToolTip = LocalTime(historyWindow.From) + "  →  " + LocalTime(historyWindow.To);

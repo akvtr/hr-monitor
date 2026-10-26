@@ -84,6 +84,7 @@ internal static partial class Tests
             TestMidnightTransitions(folder);
             TestActivityCalendarUi();
             TestCalendarEmptyState();
+            TestHistoryDateNavigation();
             TestRetentionPolicy(folder);
             TestMeasurements();
             TestMeasurementFlagCombinations();

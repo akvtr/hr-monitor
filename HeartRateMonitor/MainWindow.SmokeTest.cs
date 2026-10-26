@@ -126,6 +126,10 @@ namespace HeartRateMonitor
                             NavigateSettings(0);
                         }
                         if (i == 1) {
+                            await RefreshActivity(true); UpdateLayout();
+                            if (historyDateInput.ActualWidth < 150 || historyTimeInput.ActualWidth < 115 || activityCalendar.ActualWidth < 410)
+                                throw new InvalidOperationException("Calendar and exact-date fields must retain readable layout widths.");
+                            capture($"history-calendar-{language}-{mode.ToLowerInvariant()}");
                             await VerifySleepLabels();
                             capture($"sleep-labels-{language}-{mode.ToLowerInvariant()}");
                             if (analysisExportButton.IsEnabled)

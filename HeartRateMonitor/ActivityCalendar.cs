@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Automation;
@@ -10,100 +11,132 @@ namespace HeartRateMonitor
 {
     public sealed class ActivityCalendar : StackPanel
     {
-        private readonly TextBlock summary;
-        private readonly TextBlock activeDays, sampleCount;
-        private readonly Grid calendar = new Grid { Margin = new Thickness(0, 8, 0, 8) };
+        private readonly TextBlock title, summary;
+        private readonly Grid calendar = new Grid { Margin = new Thickness(0, 8, 0, 6) };
         private readonly List<Button> days = new List<Button>();
+        private readonly Button previous, next;
+        private DateTime? selectedDate;
+        public DateTime Month { get; private set; } = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
         public event Action<DateTime> DaySelected;
+        public event Action<DateTime> MonthChanged;
+
         public ActivityCalendar()
         {
             AutomationProperties.SetAutomationId(this, "ActivityCalendar");
-            var heading = new TextBlock { Text = Words.T("記録のリズム", "Recording rhythm"), FontSize = 18, FontWeight = FontWeights.SemiBold };
-            heading.SetResourceReference(TextBlock.ForegroundProperty, "Text");
+            title = Text("", 18); title.FontWeight = FontWeights.SemiBold;
+            title.SetResourceReference(TextBlock.ForegroundProperty, "Text");
+            AutomationProperties.SetAutomationId(title, "ActivityMonth");
+            previous = Navigation("‹", "ActivityPreviousMonth", Words.T("前の月", "Previous month"), () => SetMonth(Month.AddMonths(-1)));
+            next = Navigation("›", "ActivityNextMonth", Words.T("次の月", "Next month"), () => SetMonth(Month.AddMonths(1)));
+            var today = Navigation(Words.T("今月", "This month"), "ActivityThisMonth", Words.T("今月へ移動", "Go to this month"), () => SetMonth(DateTime.Today));
+            today.Width = 100;
+            var actions = new StackPanel { Orientation = Orientation.Horizontal };
+            actions.Children.Add(previous); actions.Children.Add(next); actions.Children.Add(today);
+            var header = new DockPanel(); DockPanel.SetDock(actions, Dock.Right); header.Children.Add(actions); header.Children.Add(title); Children.Add(header);
+            for (int i = 0; i < 7; i++) calendar.ColumnDefinitions.Add(new ColumnDefinition());
+            calendar.RowDefinitions.Add(new RowDefinition { Height = new GridLength(22) });
+            for (int i = 0; i < 6; i++) calendar.RowDefinitions.Add(new RowDefinition { Height = new GridLength(30) });
+            AutomationProperties.SetAutomationId(calendar, "ActivityCalendarDays"); Children.Add(calendar);
             summary = Text(Words.T("読み込み中…", "Loading…"));
-            AutomationProperties.SetAutomationId(summary, "ActivitySummary");
-            var title = new StackPanel(); title.Children.Add(heading); title.Children.Add(summary);
-            activeDays = Metric(); sampleCount = Metric();
-            var metrics = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-            metrics.Children.Add(activeDays);
-            var separator = new Border { Width = 1, Height = 28, Margin = new Thickness(20, 0, 20, 0) };
-            separator.SetResourceReference(Border.BackgroundProperty, "Line"); metrics.Children.Add(separator); metrics.Children.Add(sampleCount);
-            var header = new DockPanel(); DockPanel.SetDock(metrics, Dock.Right); header.Children.Add(metrics); header.Children.Add(title); Children.Add(header);
-            AutomationProperties.SetAutomationId(calendar, "ActivityCalendarDays");
-            Children.Add(calendar);
-            var footer = new DockPanel();
-            var legend = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-            var thresholds = new[] { "0", "1+", "600+", "3,600+", "10,800+" };
-            for (int i = 0; i <= 4; i++) {
-                var mark = new Border { Width = 12, Height = 12, Margin = new Thickness(i == 0 ? 0 : 12, 0, 5, 0), CornerRadius = new CornerRadius(2) };
-                mark.SetResourceReference(Border.BackgroundProperty, "Activity" + i); legend.Children.Add(mark); legend.Children.Add(Text(thresholds[i]));
-            }
-            legend.ToolTip = Words.T("有効な心拍の件数: 0 / 1〜599 / 600〜3,599 / 3,600〜10,799 / 10,800以上", "Valid samples: 0 / 1–599 / 600–3,599 / 3,600–10,799 / 10,800+");
-            DockPanel.SetDock(legend, Dock.Right); footer.Children.Add(legend);
-            Children.Add(footer);
+            summary.TextTrimming = TextTrimming.CharacterEllipsis;
+            summary.SetBinding(ToolTipProperty, new System.Windows.Data.Binding("Text") { Source = summary });
+            AutomationProperties.SetAutomationId(summary, "ActivitySummary"); Children.Add(summary);
+            UpdateMonthTitle();
         }
-        private static TextBlock Metric()
+
+        private static Button Navigation(string text, string id, string name, Action action)
         {
-            var block = new TextBlock { FontSize = 20, FontFamily = new System.Windows.Media.FontFamily("Bahnschrift, Segoe UI"), VerticalAlignment = VerticalAlignment.Center };
-            block.SetResourceReference(TextBlock.ForegroundProperty, "Accent"); return block;
+            var button = new Button { Content = text, Width = 32, Height = 32, MinWidth = 0, Padding = new Thickness(4, 0, 4, 0), Margin = new Thickness(4, 0, 0, 0), ToolTip = name };
+            AutomationProperties.SetAutomationId(button, id); AutomationProperties.SetName(button, name);
+            button.Click += (s, e) => action(); return button;
         }
-        private static TextBlock Text(string text)
+
+        private static TextBlock Text(string text, double size = 12)
         {
-            var block = new TextBlock { Text = text, FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
+            var block = new TextBlock { Text = text, FontSize = size, VerticalAlignment = VerticalAlignment.Center };
             block.SetResourceReference(TextBlock.ForegroundProperty, "TextMuted"); return block;
         }
+
+        public void SetMonth(DateTime date)
+        {
+            var month = new DateTime(date.Year, date.Month, 1);
+            if (month > new DateTime(9999, 11, 1)) throw new ArgumentOutOfRangeException(nameof(date));
+            if (month == Month) return;
+            Month = month; UpdateMonthTitle(); SetLoading(); MonthChanged?.Invoke(Month);
+        }
+
+        private void UpdateMonthTitle()
+        {
+            title.Text = Month.ToString(Words.Language == "en" ? "MMMM yyyy" : "yyyy年 M月", Words.Language == "en" ? CultureInfo.GetCultureInfo("en-US") : CultureInfo.InvariantCulture);
+            previous.IsEnabled = Month > new DateTime(1, 1, 1);
+            next.IsEnabled = Month < new DateTime(9999, 11, 1);
+        }
+
+        public void SetSelectedDate(DateTime date)
+        {
+            selectedDate = date.Date; UpdateSelection();
+        }
+
+        private void UpdateSelection()
+        {
+            foreach (var button in days) {
+                bool selected = (DateTime)button.Tag == selectedDate;
+                button.BorderThickness = new Thickness(selected ? 2 : 1);
+                button.SetResourceReference(Control.BorderBrushProperty, selected ? "Focus" : "Line");
+                AutomationProperties.SetItemStatus(button, selected ? Words.T("選択日", "Selected day") : "");
+            }
+        }
+
+        public void SetLoading()
+        {
+            calendar.Children.Clear(); days.Clear(); summary.Text = Words.T("読み込み中…", "Loading…");
+        }
+
         public void SetDays(IList<DailyActivity> activity)
         {
             if (activity == null) throw new ArgumentNullException(nameof(activity));
-            ClearDays();
-            calendar.RowDefinitions.Clear(); calendar.ColumnDefinitions.Clear();
-            long total = activity.Sum(day => day.Count); int active = activity.Count(day => day.Count > 0);
-            activeDays.Text = Words.T($"{active:N0} 日記録", $"{active:N0} active days"); sampleCount.Text = Words.T($"{total:N0} 件", $"{total:N0} samples");
-            activeDays.ToolTip = Words.T("有効な心拍が記録された日数", "Days with valid heart-rate samples");
-            sampleCount.ToolTip = Words.T("この期間に記録された有効な心拍の合計件数", "Total valid heart-rate samples in this period");
-            if (activity.Count == 0) { summary.Text = Words.T("カレンダーデータはありません", "No calendar data"); return; }
-            summary.Text = Words.T($"過去365日 · {activity[0].Date:yyyy/MM/dd} — {activity[activity.Count - 1].Date:yyyy/MM/dd}", $"Past 365 days · {activity[0].Date:yyyy/MM/dd} — {activity[activity.Count - 1].Date:yyyy/MM/dd}");
-            var origin = activity[0].Date.AddDays(-(int)activity[0].Date.DayOfWeek);
-            int weeks = ((activity[activity.Count - 1].Date - origin).Days / 7) + 1;
-            calendar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) });
-            for (int i = 0; i < weeks; i++) calendar.ColumnDefinitions.Add(new ColumnDefinition());
-            calendar.RowDefinitions.Add(new RowDefinition { Height = new GridLength(20) });
-            for (int i = 0; i < 7; i++) calendar.RowDefinitions.Add(new RowDefinition { Height = new GridLength(15) });
-            foreach (int row in new[] { 1, 3, 5 }) {
-                var label = Text(Words.T(new[] { "日", "月", "火", "水", "木", "金", "土" }[row], new[] { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" }[row]));
-                Grid.SetRow(label, row + 1); calendar.Children.Add(label);
+            var focused = days.FirstOrDefault(button => button.IsKeyboardFocused);
+            DateTime? focusDate = focused == null ? (DateTime?)null : (DateTime)focused.Tag;
+            calendar.Children.Clear(); days.Clear();
+            var visible = activity.Where(day => day.Date.Year == Month.Year && day.Date.Month == Month.Month).ToList();
+            if (visible.Count == 0) { summary.Text = Words.T("カレンダーデータはありません", "No calendar data"); return; }
+            var names = Words.Language == "en" ? new[] { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" } : new[] { "日", "月", "火", "水", "木", "金", "土" };
+            for (int i = 0; i < names.Length; i++) {
+                var label = Text(names[i]); label.HorizontalAlignment = HorizontalAlignment.Center;
+                Grid.SetColumn(label, i); calendar.Children.Add(label);
             }
-            int previousMonth = -1, lastLabelColumn = -4;
-            for (int index = 0; index < activity.Count; index++) {
-                var day = activity[index]; int column = (day.Date - origin).Days / 7 + 1;
-                if (day.Date.Month != previousMonth) {
-                    previousMonth = day.Date.Month;
-                    bool shortFirstMonth = index == 0 && day.Date.AddDays(21).Month != day.Date.Month;
-                    if (!shortFirstMonth && column - lastLabelColumn >= 3) {
-                        var month = Text(Words.T(day.Date.Month + "月", day.Date.ToString("MMM", System.Globalization.CultureInfo.GetCultureInfo("en-US"))));
-                        Grid.SetColumn(month, column); Grid.SetColumnSpan(month, Math.Min(3, weeks - column + 1)); calendar.Children.Add(month); lastLabelColumn = column;
-                    }
-                }
-                string detail = Words.T($"{day.Date:yyyy/MM/dd} · 有効な心拍 {day.Count:N0}件", $"{day.Date:yyyy/MM/dd} · {day.Count:N0} valid samples");
-                var button = new Button { Style = (Style)FindResource("ActivityDay"), ToolTip = detail + Words.T(" · 選ぶとその日の履歴へ", " · Select to view this day's history"), IsTabStop = index == activity.Count - 1 };
-                button.SetResourceReference(Control.BackgroundProperty, "Activity" + DailyActivity.Level(day.Count));
-                AutomationProperties.SetName(button, detail); AutomationProperties.SetAutomationId(button, "ActivityDay" + day.Date.ToString("yyyyMMdd"));
-                button.Click += (s, e) => DaySelected?.Invoke(day.Date);
-                int position = index;
+            foreach (var day in visible) {
+                int index = days.Count;
+                string detail = day.Date.ToString("yyyy/MM/dd", CultureInfo.InvariantCulture) + Words.T($" · 有効な心拍 {day.Count:N0}件", $" · {day.Count:N0} valid samples");
+                var button = new Button { Content = day.Date.Day.ToString(CultureInfo.InvariantCulture) + (day.Count > 0 ? " •" : ""), Tag = day.Date.Date,
+                    Style = (Style)FindResource("ActivityDay"), ToolTip = detail + Words.T(" · 選ぶとその日の履歴へ", " · Select to view this day's history"), IsTabStop = false };
+                button.SetResourceReference(Control.BackgroundProperty, day.Count > 0 ? "AccentSoft" : "SurfaceAlt");
+                button.SetResourceReference(Control.ForegroundProperty, "Text");
+                button.FontWeight = day.Count > 0 ? FontWeights.SemiBold : FontWeights.Normal;
+                AutomationProperties.SetName(button, detail); AutomationProperties.SetAutomationId(button, "ActivityDay" + day.Date.ToString("yyyyMMdd", CultureInfo.InvariantCulture));
+                button.Click += (s, e) => { SetSelectedDate(day.Date); DaySelected?.Invoke(day.Date); };
                 button.PreviewKeyDown += (s, e) => {
-                    int offset = e.Key == Key.Left ? -7 : e.Key == Key.Right ? 7 : e.Key == Key.Up ? -1 : e.Key == Key.Down ? 1 : 0;
+                    int offset = e.Key == Key.Left ? -1 : e.Key == Key.Right ? 1 : e.Key == Key.Up ? -7 : e.Key == Key.Down ? 7 : 0;
                     if (offset == 0) return;
-                    int target = Math.Max(0, Math.Min(days.Count - 1, position + offset));
+                    int target = Math.Max(0, Math.Min(days.Count - 1, index + offset));
                     foreach (var cell in days) cell.IsTabStop = false;
                     days[target].IsTabStop = true; days[target].Focus(); e.Handled = true;
                 };
-                Grid.SetColumn(button, column); Grid.SetRow(button, (int)day.Date.DayOfWeek + 1); calendar.Children.Add(button); days.Add(button);
+                int position = (int)Month.DayOfWeek + day.Date.Day - 1;
+                Grid.SetColumn(button, position % 7); Grid.SetRow(button, position / 7 + 1); calendar.Children.Add(button); days.Add(button);
             }
+            var entry = days.FirstOrDefault(button => (DateTime)button.Tag == focusDate)
+                ?? days.FirstOrDefault(button => (DateTime)button.Tag == selectedDate) ?? days[0];
+            entry.IsTabStop = true;
+            if (focusDate.HasValue) entry.Focus();
+            UpdateSelection();
+            long count = visible.Sum(day => day.Count); int active = visible.Count(day => day.Count > 0);
+            summary.Text = Words.T($"この月: {active:N0} 日記録 · {count:N0} 件 · • 記録あり", $"This month: {active:N0} active days · {count:N0} samples · • Recorded");
         }
-        private void ClearDays()
+
+        public void SetError(string message)
         {
-            calendar.Children.Clear(); days.Clear();
+            calendar.Children.Clear(); days.Clear(); summary.Text = Words.T("カレンダーの読込エラー: ", "Calendar read failed: ") + message;
         }
-        public void SetError(string message) { summary.Text = Words.T("カレンダーの読込エラー: ", "Calendar read failed: ") + message; activeDays.Text = "—"; sampleCount.Text = "—"; ClearDays(); }
     }
 }

@@ -1,11 +1,13 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
   <Style x:Key="ActivityDay" TargetType="Button">
-    <Setter Property="Height" Value="13"/><Setter Property="Margin" Value="1"/>
+    <Setter Property="Height" Value="28"/><Setter Property="Margin" Value="1"/>
     <Setter Property="Padding" Value="0"/><Setter Property="MinWidth" Value="0"/>
     <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
     <Setter Property="Cursor" Value="Hand"/>
     <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
-      <Border x:Name="Cell" Background="{TemplateBinding Background}" CornerRadius="2" BorderThickness="1" BorderBrush="{DynamicResource Line}"/>
+      <Border x:Name="Cell" Background="{TemplateBinding Background}" CornerRadius="2" BorderThickness="{TemplateBinding BorderThickness}" BorderBrush="{TemplateBinding BorderBrush}">
+        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+      </Border>
       <ControlTemplate.Triggers>
         <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Cell" Property="BorderBrush" Value="{DynamicResource Focus}"/></Trigger>
         <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Cell" Property="BorderBrush" Value="{DynamicResource Focus}"/><Setter TargetName="Cell" Property="BorderThickness" Value="2"/></Trigger>

@@ -209,21 +209,27 @@ internal static partial class Tests
             try {
                 ThemeManager.Initialize(host); ThemeManager.Apply(host, "Dark");
                 var calendar = new ActivityCalendar(); host.Content = calendar;
-                var start = new DateTime(2025, 10, 25);
-                var activity = Enumerable.Range(0, 365).Select(i => new DailyActivity { Date = start.AddDays(i), Count = i == 0 ? 600 : 0 }).ToList();
+                var start = new DateTime(2024, 2, 1);
+                calendar.SetMonth(start);
+                var activity = Enumerable.Range(0, 29).Select(i => new DailyActivity { Date = start.AddDays(i), Count = i == 0 ? 600 : 0 }).ToList();
                 calendar.SetDays(activity);
                 var grid = calendar.Children.OfType<System.Windows.Controls.Grid>().Single();
                 var buttons = grid.Children.OfType<System.Windows.Controls.Button>().ToList();
-                Check(buttons.Count == 365 && buttons.Count(b => b.IsTabStop) == 1, "calendar exposes every day with a single keyboard tab entry");
-                Check(System.Windows.Automation.AutomationProperties.GetAutomationId(buttons[0]) == "ActivityDay20251025", "calendar exposes exact dates to automation");
-                Check(grid.Children.OfType<System.Windows.Controls.TextBlock>().Any(label => label.Text == "11月"), "short first month does not suppress the next month label");
+                Check(buttons.Count == 29 && buttons.Count(b => b.IsTabStop) == 1, "monthly calendar includes leap day with a single keyboard tab entry");
+                Check(System.Windows.Automation.AutomationProperties.GetAutomationId(buttons[0]) == "ActivityDay20240201", "calendar exposes exact dates older than a year to automation");
+                Check(System.Windows.Controls.Grid.GetColumn(buttons[0]) == 4 && System.Windows.Controls.Grid.GetRow(buttons[0]) == 1,
+                    "monthly calendar places February 2024 under the correct weekday");
                 DateTime? selected = null; calendar.DaySelected += date => selected = date;
                 buttons[0].RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
                 Check(selected == start, "calendar click navigates to the matching recorded date");
                 buttons[1].RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
                 Check(selected == start.AddDays(1), "calendar empty-day click preserves the requested date");
                 ThemeManager.Apply(host, "Light");
-                Check(buttons[0].Background == host.Resources["Activity2"], "calendar day colors follow shared theme resources");
+                Check(buttons[0].Background == host.Resources["AccentSoft"] && buttons[0].Content.ToString().Contains("•"), "recorded calendar days use shared colors and a non-color indicator");
+                Check(buttons[1].BorderThickness.Left == 2, "selected day is visibly outlined");
+                DateTime? month = null; calendar.MonthChanged += date => month = date;
+                calendar.SetMonth(new DateTime(2023, 12, 10));
+                Check(month == new DateTime(2023, 12, 1) && grid.Children.Count == 0, "month navigation requests a normalized month and clears stale dates while loading");
                 calendar.SetError("isolated error");
                 Check(grid.Children.Count == 0, "calendar read failure clears stale day values");
             } finally { host.Close(); }
@@ -284,8 +290,9 @@ internal static partial class Tests
             "history detail preserves exact statistics and half-open chart boundaries");
         var analysis = history.Summarize(new TimeWindow(2000, 4000));
         Check(analysis.Count == 1 && analysis.Average == 100, "history analysis uses its own selected interval");
-        Check(history.LoadActivity(new DateTime(1970, 1, 1), TimeZoneInfo.Utc).Last().Count == 3,
-            "history activity includes only valid samples in the requested calendar day");
+        var activity = history.LoadActivity(new DateTime(1970, 1, 18), TimeZoneInfo.Utc);
+        Check(activity.Count == 31 && activity.First().Count == 3 && activity.Last().Date == new DateTime(1970, 1, 31),
+            "history activity loads only the requested month and includes only valid samples");
         string csv = Path.Combine(folder, "repository-export.csv");
         Check(history.Export(csv, range) == 4 && File.ReadAllLines(csv).Length == 5,
             "history CSV retains invalid samples while respecting the displayed interval");
