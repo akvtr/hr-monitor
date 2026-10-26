@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -26,15 +27,22 @@ namespace HeartRateMonitor
         {
             host = Input(settings.Host); port = Input(settings.Port.ToString()); intName = Input(settings.IntParameter); floatName = Input(settings.FloatParameter); percentMin = Input(settings.PercentMin.ToString()); percentMax = Input(settings.PercentMax.ToString());
             oscEnabled = Check(T("OSC送信を有効にする", "Enable OSC transmission"), settings.OscEnabled);
-            oscTimeoutMode = Choice(new[] { T("最終値を維持", "Keep last value"), T("無受信時に両方へ0を送信", "Send both values as zero on timeout") }, settings.OscZeroOnTimeout ? 1 : 0, 360);
+            oscTimeoutMode = Choice(new[] { T("最終値を維持", "Keep last value"), T("無受信時に代替値を送信", "Send fallback values on timeout") }, settings.OscZeroOnTimeout ? 1 : 0, 360);
             oscTimeoutSeconds = Input(settings.OscTimeoutSeconds.ToString());
-            string timeoutHelp = T("起動または最終通知から計測し、停止中も対象です。0はOSCだけに一度送信し、記録しません。", "Measured since startup or the last notification, including while stopped. Zeros are sent once via OSC and are not recorded.");
+            oscTimeoutInt = Input(settings.OscTimeoutInt.ToString());
+            oscTimeoutFloat = Input(settings.OscTimeoutFloat.ToString(CultureInfo.CurrentCulture));
+            string timeoutHelp = T("起動または最終通知から計測し、停止中も対象です。代替値は換算せずOSCだけに一度送信し、記録しません。", "Measured since startup or the last notification, including while stopped. Fallbacks are sent once without conversion via OSC and are not recorded.");
             oscTimeoutSeconds.ToolTip = timeoutHelp;
             AutomationProperties.SetHelpText(oscTimeoutSeconds, timeoutHelp);
-            oscTimeoutSeconds.IsEnabled = settings.OscZeroOnTimeout;
-            oscTimeoutMode.SelectionChanged += (s, e) => oscTimeoutSeconds.IsEnabled = oscTimeoutMode.SelectedIndex == 1;
+            Action updateTimeoutFields = () => {
+                oscTimeoutSeconds.IsEnabled = oscTimeoutInt.IsEnabled = oscTimeoutFloat.IsEnabled = oscTimeoutMode.SelectedIndex == 1;
+            };
+            updateTimeoutFields();
+            oscTimeoutMode.SelectionChanged += (s, e) => updateTimeoutFields();
             AutomationProperties.SetAutomationId(oscTimeoutMode, "OscTimeoutMode");
             AutomationProperties.SetAutomationId(oscTimeoutSeconds, "OscTimeoutSeconds");
+            AutomationProperties.SetAutomationId(oscTimeoutInt, "OscTimeoutInt");
+            AutomationProperties.SetAutomationId(oscTimeoutFloat, "OscTimeoutFloat");
             autoConnect = Check(T("起動時に自動接続する", "Connect automatically on startup"), settings.AutoConnect);
             autoReconnect = Check(T("切断時に自動再接続する", "Reconnect after disconnection"), settings.AutoReconnect);
             closeToTray = Check(T("閉じるボタンでタスクトレイに格納", "Keep running in the tray when closed"), settings.CloseToTray);
@@ -68,10 +76,14 @@ namespace HeartRateMonitor
             conversionFields.Children.Add(Field(T("最小 bpm → 0.0", "Minimum bpm → 0.0"), percentMin)); var maxField = Field(T("最大 bpm → 1.0", "Maximum bpm → 1.0"), percentMax); Grid.SetColumn(maxField, 2); conversionFields.Children.Add(maxField);
             var oscSection = Stack(Heading(T("送信先とパラメーター", "Destination & parameters")), oscEnabled, portFields,
                 Field(T("Intパラメーター名", "Int parameter name"), intName), Field(T("Floatパラメーター名", "Float parameter name"), floatName));
+            var fallbackFields = new Grid(); fallbackFields.ColumnDefinitions.Add(new ColumnDefinition()); fallbackFields.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(18) }); fallbackFields.ColumnDefinitions.Add(new ColumnDefinition());
+            fallbackFields.Children.Add(Field(T("Int代替値（0〜255）", "Int fallback (0–255)"), oscTimeoutInt));
+            var floatFallback = Field(T("Float代替値（0.0〜1.0）", "Float fallback (0.0–1.0)"), oscTimeoutFloat);
+            Grid.SetColumn(floatFallback, 2); fallbackFields.Children.Add(floatFallback);
             var valuesSection = Stack(Heading(T("送信値と無受信時の動作", "Values & timeout behavior")),
                 Label(T("心拍値の変換（Floatパラメーター）", "Heart-rate conversion (Float parameter)"), 12, "Text"), conversionFields,
                 new Border { Height = 16 }, Field(T("無受信時の送信動作", "Transmission on receive timeout"), oscTimeoutMode), new Border { Height = 12 },
-                Field(T("無受信時間（1〜3600秒）", "Receive timeout (1–3600 seconds)"), oscTimeoutSeconds));
+                Field(T("無受信時間（1〜3600秒）", "Receive timeout (1–3600 seconds)"), oscTimeoutSeconds), fallbackFields);
             var generalSection = Stack(Heading(T("一般", "General")), Field(T("テーマ", "Theme"), themeChoice), new Border { Height = 16 },
                 Field(T("表示言語", "Language"), languageChoice), new Border { Height = 16 }, closeToTray);
             var storageLocation = Label(folder, 11, "TextMuted"); storageLocation.Margin = new Thickness(0, 4, 0, 0);
@@ -120,6 +132,9 @@ namespace HeartRateMonitor
                 next.OscEnabled = oscEnabled.IsChecked == true; next.AutoConnect = autoConnect.IsChecked == true; next.AutoReconnect = autoReconnect.IsChecked == true; next.CloseToTray = closeToTray.IsChecked == true;
                 next.OscZeroOnTimeout = oscTimeoutMode.SelectedIndex == 1;
                 if (!int.TryParse(oscTimeoutSeconds.Text, out value)) throw new ArgumentException(T("無受信時間は整数で入力してください。", "Receive timeout must be an integer.")); next.OscTimeoutSeconds = value;
+                if (!int.TryParse(oscTimeoutInt.Text, out value)) throw new ArgumentException(T("Int代替値は整数で入力してください。", "Int fallback must be an integer.")); next.OscTimeoutInt = value;
+                float fallback;
+                if (!float.TryParse(oscTimeoutFloat.Text, NumberStyles.Float, CultureInfo.CurrentCulture, out fallback)) throw new ArgumentException(T("Float代替値は数値で入力してください。", "Float fallback must be a number.")); next.OscTimeoutFloat = fallback;
                 next.Theme = new[] { "System", "Dark", "Light" }[themeChoice.SelectedIndex]; next.Language = languageChoice.SelectedIndex == 1 ? "en" : "ja";
                 if (retentionChoice.SelectedIndex < 0) throw new ArgumentException(T("保存期間を選択してください。", "Choose a retention period."));
                 next.RetentionDays = Settings.RetentionDayOptions[retentionChoice.SelectedIndex];

@@ -210,7 +210,7 @@ namespace HeartRateMonitor
         private void UpdateOsc()
         {
             string status = !settings.OscEnabled ? T("無効", "Disabled") : oscFailure != null ? T("送信エラー: ", "Send failed: ") + oscFailure :
-                transmission == null ? T("送信待ち", "Waiting to send") : (transmission.Timeout ? T("無受信のため0をUDP送信済み", "Timeout zeros sent via UDP") : transmission.Test ? T("テストUDP送信済み", "Test UDP sent") : T("UDP送信済み", "UDP sent")) + " · " + transmission.Time.ToString("HH:mm:ss");
+                transmission == null ? T("送信待ち", "Waiting to send") : (transmission.Timeout ? T("無受信のため代替値をUDP送信済み", "Timeout fallback sent via UDP") : transmission.Test ? T("テストUDP送信済み", "Test UDP sent") : T("UDP送信済み", "UDP sent")) + " · " + transmission.Time.ToString("HH:mm:ss");
             oscText.Text = status;
             oscText.SetResourceReference(TextBlock.ForegroundProperty, !settings.OscEnabled ? "TextMuted" : oscFailure != null ? "Danger" : transmission != null ? "Success" : "Accent");
             oscDetail.Text = settings.Host + ":" + settings.Port + "\nInt   " + Settings.Address(settings.IntParameter) + "\nFloat " + Settings.Address(settings.FloatParameter);

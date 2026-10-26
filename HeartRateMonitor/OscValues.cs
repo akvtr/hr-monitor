@@ -10,12 +10,12 @@ namespace HeartRateMonitor
         internal int Integer { get; }
         internal float Percent { get; }
 
-        internal OscValues(Settings settings, int bpm)
+        internal OscValues(Settings settings, int bpm, bool timeout = false)
         {
             IntAddress = Settings.Address(settings.IntParameter);
             FloatAddress = Settings.Address(settings.FloatParameter);
-            Integer = Math.Max(0, Math.Min(255, bpm));
-            Percent = settings.Percent(bpm);
+            Integer = timeout ? settings.OscTimeoutInt : Math.Max(0, Math.Min(255, bpm));
+            Percent = timeout ? settings.OscTimeoutFloat : settings.Percent(bpm);
         }
     }
 }

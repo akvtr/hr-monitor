@@ -19,6 +19,8 @@ namespace HeartRateMonitor
         public bool OscEnabled { get; set; } = true;
         public bool OscZeroOnTimeout { get; set; } = true;
         public int OscTimeoutSeconds { get; set; } = 5;
+        public int OscTimeoutInt { get; set; } = 0;
+        public float OscTimeoutFloat { get; set; } = 0;
         public bool AutoReconnect { get; set; } = true;
         public bool AutoConnect { get; set; } = true;
         public string Theme { get; set; } = "System";
@@ -56,6 +58,9 @@ namespace HeartRateMonitor
             if (LastAddressType != -1 && !Enum.IsDefined(typeof(BluetoothAddressType), LastAddressType))
                 throw new ArgumentException(Words.T("前回のBluetoothアドレス種別が不正です。", "The saved Bluetooth address type is invalid."));
             if (OscTimeoutSeconds < 1 || OscTimeoutSeconds > 3600) throw new ArgumentException(Words.T("OSCの無受信時間は1〜3600秒で指定してください。", "OSC receive timeout must be between 1 and 3600 seconds."));
+            if (OscTimeoutInt < 0 || OscTimeoutInt > 255) throw new ArgumentException(Words.T("無受信時のInt代替値は0〜255で指定してください。", "Timeout Int fallback must be between 0 and 255."));
+            if (float.IsNaN(OscTimeoutFloat) || float.IsInfinity(OscTimeoutFloat) || OscTimeoutFloat < 0 || OscTimeoutFloat > 1)
+                throw new ArgumentException(Words.T("無受信時のFloat代替値は0.0〜1.0で指定してください。", "Timeout Float fallback must be between 0.0 and 1.0."));
             if (!RetentionDayOptions.Contains(RetentionDays)) throw new ArgumentException(Words.T("保存期間を選択してください。", "Choose a retention period."));
             if (Language != "ja" && Language != "en") throw new ArgumentException("Language must be ja or en.");
             if (Theme != "System" && Theme != "Dark" && Theme != "Light") throw new ArgumentException(Words.T("テーマを選択してください。", "Choose a theme."));

@@ -79,6 +79,12 @@ internal static partial class Tests
         var legacy = Settings.Load(legacyPath);
         Check(new Settings().OscZeroOnTimeout, "new settings default to sending both OSC values as zero on timeout");
         Check(legacy.OscZeroOnTimeout && legacy.OscTimeoutSeconds == 5, "settings without an OSC timeout mode default to zeros after five seconds");
+        Check(legacy.OscTimeoutInt == 0 && legacy.OscTimeoutFloat == 0, "legacy settings preserve zero fallback payloads");
+        foreach (int integer in new[] { -1, 256 })
+            Throws(() => new Settings { OscTimeoutInt = integer }.Validate(), "invalid timeout Int fallback: " + integer);
+        foreach (float floating in new[] { -0.01f, 1.01f, float.NaN, float.PositiveInfinity, float.NegativeInfinity })
+            Throws(() => new Settings { OscTimeoutFloat = floating }.Validate(), "invalid timeout Float fallback: " + floating);
+        new Settings { OscTimeoutInt = 255, OscTimeoutFloat = 1 }.Validate();
         File.WriteAllText(legacyPath, "{\"OscZeroOnTimeout\":false,\"OscTimeoutSeconds\":12}");
         var savedKeepLast = Settings.Load(legacyPath);
         Check(!savedKeepLast.OscZeroOnTimeout && savedKeepLast.OscTimeoutSeconds == 12, "an explicitly saved keep-last mode and interval are preserved");
@@ -89,9 +95,10 @@ internal static partial class Tests
         new Settings { OscTimeoutSeconds = 1 }.Validate();
         new Settings { OscTimeoutSeconds = 3600 }.Validate();
         string configPath = Path.Combine(folder, "osc-timeout-settings.json");
-        new Settings { OscZeroOnTimeout = true, OscTimeoutSeconds = 12 }.Save(configPath);
+        new Settings { OscZeroOnTimeout = true, OscTimeoutSeconds = 12, OscTimeoutInt = 42, OscTimeoutFloat = 0.75f }.Save(configPath);
         var loaded = Settings.Load(configPath);
         Check(loaded.OscZeroOnTimeout && loaded.OscTimeoutSeconds == 12, "OSC timeout settings survive save and reload");
+        Check(loaded.OscTimeoutInt == 42 && loaded.OscTimeoutFloat == 0.75f, "custom fallback values survive save and reload");
 
         string database = Path.Combine(folder, "osc-timeout.db");
         using (var receiver = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0))) {
@@ -119,12 +126,19 @@ internal static partial class Tests
                 using (var store = new Store(database)) Check(store.Bounds() == null, "timeout zeros do not fabricate a stored reading");
                 Thread.Sleep(1200);
                 Check(receiver.Available == 0, "a silent period sends zeros once without repeated packets");
+                config.OscTimeoutInt = 42; config.OscTimeoutFloat = 0.75f; engine.Configure(config);
+                receive(42, 0.75f);
+                WaitUntil(() => transmissions.Last().Integer == 42);
+                Check(transmissions.Last().Timeout && transmissions.Last().Percent == 0.75f, "changing fallback during silence sends raw configured values and matching timeout status");
+                engine.Configure(config);
+                Thread.Sleep(200);
+                Check(receiver.Available == 0, "saving unchanged fallback values does not rearm timeout transmission");
                 engine.Accept(new Reading { UnixMs = 1000, Bpm = 80 }); receive(80, 0.25f);
                 Thread.Sleep(600);
                 engine.Accept(new Reading { UnixMs = 2000, Bpm = 0, Contact = false });
                 Thread.Sleep(600);
                 Check(receiver.Available == 0, "even a no-contact notification restarts the receive timer without sending a live value");
-                receive(0, 0);
+                receive(42, 0.75f);
                 engine.Accept(new Reading { UnixMs = 3000, Bpm = 120 }); receive(120, 0.5f);
                 WaitUntil(() => transmissions.Last().Integer == 120);
                 Check(!transmissions.Last().Timeout, "valid reception resumes normal output after timeout zeros");
@@ -134,8 +148,8 @@ internal static partial class Tests
                 config.OscEnabled = false; config.OscZeroOnTimeout = true; engine.Configure(config);
                 Thread.Sleep(1200);
                 Check(receiver.Available == 0, "disabled OSC suppresses timeout zeros");
-                config.OscEnabled = true; engine.Configure(config); receive(0, 0);
-                engine.TestAsync(80).GetAwaiter().GetResult(); receive(80, 0.25f); receive(0, 0);
+                config.OscEnabled = true; engine.Configure(config); receive(42, 0.75f);
+                engine.TestAsync(80).GetAwaiter().GetResult(); receive(80, 0.25f); receive(42, 0.75f);
                 Check(transmissions.Count(t => t.Test) == 2, "one-shot tests stay separate and do not restart the receive timer");
             } finally { engine.StopAsync().GetAwaiter().GetResult(); }
             using (var store = new Store(database)) Check(store.Query(0, long.MaxValue).Count == 3, "only the three real notifications are stored across timeout and test transmissions");

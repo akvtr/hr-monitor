@@ -14,7 +14,7 @@ namespace HeartRateMonitor
         private TextBlock connection, deviceTitle, advice, bpmText, lastText, oscText, oscDetail, errorText, liveStats, settingsStatus, testStatus;
         private HeartChart liveChart, historyChart;
         private ComboBox devices, themeChoice, languageChoice, retentionChoice, oscTimeoutMode;
-        private TextBox host, port, intName, floatName, percentMin, percentMax, testBpm, oscTimeoutSeconds;
+        private TextBox host, port, intName, floatName, percentMin, percentMax, testBpm, oscTimeoutSeconds, oscTimeoutInt, oscTimeoutFloat;
         private CheckBox oscEnabled, autoConnect, autoReconnect, closeToTray;
         private Button scanButton, connectButton, autoButton, stopButton, retryButton, testButton;
         private Popup connectionPopup;

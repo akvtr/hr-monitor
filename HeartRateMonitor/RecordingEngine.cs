@@ -131,6 +131,7 @@ namespace HeartRateMonitor
             var previous = timeoutConfiguration;
             if (previous == null || previous.OscEnabled != current.OscEnabled || previous.OscZeroOnTimeout != current.OscZeroOnTimeout ||
                 previous.OscTimeoutSeconds != current.OscTimeoutSeconds || previous.Host != current.Host || previous.Port != current.Port ||
+                previous.OscTimeoutInt != current.OscTimeoutInt || previous.OscTimeoutFloat != current.OscTimeoutFloat ||
                 previous.IntParameter != current.IntParameter || previous.FloatParameter != current.FloatParameter)
                 timeoutSent = false;
             timeoutConfiguration = current;
@@ -144,7 +145,7 @@ namespace HeartRateMonitor
         private void Send(OscSender sender, Settings config, int bpm, bool test, bool timeout = false)
         {
             if (!config.OscEnabled) throw new InvalidOperationException(Words.T("設定でOSC送信を有効にして保存してください。", "Enable OSC in Settings and save first."));
-            var values = new OscValues(config, bpm);
+            var values = new OscValues(config, bpm, timeout);
             sender.Send(config, values);
             var transmission = new OscTransmission { Endpoint = config.Host + ":" + config.Port, IntAddress = values.IntAddress, FloatAddress = values.FloatAddress, Integer = values.Integer, Percent = values.Percent, Test = test, Timeout = timeout };
             NotifyObservers(Transmitted, handler => handler(transmission));

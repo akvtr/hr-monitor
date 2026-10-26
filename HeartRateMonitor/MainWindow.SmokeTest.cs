@@ -105,9 +105,14 @@ namespace HeartRateMonitor
                             NavigateSettings(5);
                             oscTimeoutMode.SelectedIndex = 1;
                             oscTimeoutSeconds.Text = "12";
-                            if (!oscTimeoutSeconds.IsEnabled) throw new InvalidOperationException("Zero-on-timeout mode must enable its interval field.");
+                            oscTimeoutInt.Text = "42";
+                            oscTimeoutFloat.Text = 0.75f.ToString(System.Globalization.CultureInfo.CurrentCulture);
+                            if (!oscTimeoutSeconds.IsEnabled || !oscTimeoutInt.IsEnabled || !oscTimeoutFloat.IsEnabled) throw new InvalidOperationException("Fallback mode must enable its interval and value fields.");
                             SaveClicked(null, null); await Task.Delay(200); UpdateLayout();
                             var savedOsc = Settings.Load(settingsPath);
+                            if (savedOsc.OscTimeoutInt != 42 || savedOsc.OscTimeoutFloat != 0.75f || oscTimeoutInt.Text != "42" ||
+                                oscTimeoutFloat.Text != 0.75f.ToString(System.Globalization.CultureInfo.CurrentCulture))
+                                throw new InvalidOperationException("Custom fallback values must persist after saving.");
                             if (!savedOsc.OscZeroOnTimeout || savedOsc.OscTimeoutSeconds != 12 || oscTimeoutMode.SelectedIndex != 1 || oscTimeoutSeconds.Text != "12")
                                 throw new InvalidOperationException("OSC timeout mode and interval must persist after saving.");
                             capture($"smoke-{language}-{mode.ToLowerInvariant()}-osc-timeout");
@@ -116,13 +121,25 @@ namespace HeartRateMonitor
                             if (Settings.Load(settingsPath).OscTimeoutSeconds != 12 || settings.OscTimeoutSeconds != 12)
                                 throw new InvalidOperationException("An invalid OSC timeout must not overwrite saved settings.");
                             oscTimeoutSeconds.Text = "12";
+                            foreach (string invalid in new[] { "-1", "256", "invalid" }) {
+                                oscTimeoutInt.Text = invalid; SaveClicked(null, null);
+                                if (Settings.Load(settingsPath).OscTimeoutInt != 42 || settings.OscTimeoutInt != 42)
+                                    throw new InvalidOperationException("Invalid Int fallback must not overwrite saved settings.");
+                            }
+                            oscTimeoutInt.Text = "42";
+                            foreach (string invalid in new[] { "-1", "2", "NaN", "Infinity", "invalid" }) {
+                                oscTimeoutFloat.Text = invalid; SaveClicked(null, null);
+                                if (Settings.Load(settingsPath).OscTimeoutFloat != 0.75f || settings.OscTimeoutFloat != 0.75f)
+                                    throw new InvalidOperationException("Invalid Float fallback must not overwrite saved settings.");
+                            }
+                            oscTimeoutFloat.Text = 0.75f.ToString(System.Globalization.CultureInfo.CurrentCulture);
                             oscTimeoutMode.SelectedIndex = 0;
-                            if (oscTimeoutSeconds.IsEnabled) throw new InvalidOperationException("Keep-last mode must disable the interval field.");
+                            if (oscTimeoutSeconds.IsEnabled || oscTimeoutInt.IsEnabled || oscTimeoutFloat.IsEnabled) throw new InvalidOperationException("Keep-last mode must disable the interval and fallback fields.");
                             SaveClicked(null, null); await Task.Delay(80); UpdateLayout();
                             if (Settings.Load(settingsPath).OscZeroOnTimeout) throw new InvalidOperationException("Keep-last mode must persist.");
                             if (tabs.SelectedIndex != 2 || settingsCategory != 5 || !settingsSections[5].IsVisible || settingsLinks[5].IsChecked != true)
                                 throw new InvalidOperationException("Saving settings lost the selected tab or category.");
-                            File.AppendAllText(checksPath, $"PASS {language}/{mode}: category retained across tabs and save, OSC timeout persists, invalid interval rejected, interval enabled only in zero mode.{Environment.NewLine}");
+                            File.AppendAllText(checksPath, $"PASS {language}/{mode}: category retained across tabs and save, OSC timeout and custom fallback values persist, invalid interval and fallback values rejected, fields enabled only in fallback mode.{Environment.NewLine}");
                             NavigateSettings(0);
                         }
                         if (i == 1) {
