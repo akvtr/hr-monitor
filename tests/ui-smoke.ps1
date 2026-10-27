@@ -184,7 +184,24 @@ try {
     if (!$customSleep) { throw 'Custom sleep range was not available.' }
     $customSleep.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
     Start-Sleep -Milliseconds 100
-    foreach ($sleepControl in @('SleepAverageHeart','SleepAverageDuration','SleepTypicalTime','SleepRangeChoice','SleepFromDate','SleepToDate','SleepApplyRange')) { [void](Find-Control $sleepControl) }
+    foreach ($sleepControl in @('SleepAverageHeart','SleepAverageDuration','SleepTypicalTime','SleepRangeChoice','SleepFromDate','SleepToDate','SleepApplyRange','SleepDetail','SleepRhythmPrevious','SleepRhythmNext')) { [void](Find-Control $sleepControl) }
+    function Assert-SleepFits {
+        foreach ($removedSleepId in @('SleepRecords','SleepDelete','SleepExclude','SleepOpenHistory')) {
+            $removedSleepCondition = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::AutomationIdProperty, $removedSleepId)
+            if ($window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $removedSleepCondition)) { throw "Removed sleep management control remains: $removedSleepId" }
+        }
+        $sleepWindowRect = $window.Current.BoundingRectangle
+        foreach ($visibleSleepId in @('SleepAverageHeart','SleepAverageDuration','SleepTypicalTime','SleepRangeChoice','SleepDetail','SleepRhythmPrevious','SleepRhythmNext')) {
+            $sleepElement = Find-Control $visibleSleepId
+            $sleepRect = $sleepElement.Current.BoundingRectangle
+            if ($sleepElement.Current.IsOffscreen -or $sleepRect.Width -le 0 -or $sleepRect.Height -le 0 -or $sleepRect.Left -lt $sleepWindowRect.Left -or $sleepRect.Right -gt $sleepWindowRect.Right -or $sleepRect.Bottom -gt $sleepWindowRect.Bottom) { throw "Sleep content is outside its single-screen viewport: $visibleSleepId" }
+        }
+    }
+    Assert-SleepFits
+    $transform.Resize(1020,760)
+    Start-Sleep -Milliseconds 250
+    Assert-SleepFits
+    $transform.Resize(1200,880)
     $sleepDateValue = (Find-Control 'SleepFromDate').GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
     $validSleepDate = $sleepDateValue.Current.Value
     $sleepDateValue.SetValue('2020/02/30')
@@ -199,7 +216,8 @@ try {
     (Find-Control 'SleepTab').GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
     Start-Sleep -Milliseconds 150
     if ((Find-Control 'SleepRangeChoice').GetCurrentPattern([System.Windows.Automation.SelectionPattern]::Pattern).Current.GetSelection()[0].Current.Name -ne $sleepPeriod) { throw 'Returning to Sleep changed its period selector.' }
-    Write-Output 'PASS Sleep navigation exposes all three overview metrics and period controls'
+    Assert-SleepFits
+    Write-Output 'PASS Sleep metrics, timeline navigation and selected graph fit one screen without record list or deletion actions'
     (Find-Control 'Tab2').GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
     function Select-Retention([string]$label) {
         $retention = Find-Control 'RetentionChoice'
@@ -250,7 +268,11 @@ try {
     Write-Output 'PASS English applies immediately and persists'
     (Find-Control 'SleepTab').GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
     Start-Sleep -Milliseconds 250
-    foreach ($sleepControl in @('SleepAverageHeart','SleepAverageDuration','SleepTypicalTime','SleepRangeChoice')) { [void](Find-Control $sleepControl) }
+    foreach ($sleepControl in @('SleepAverageHeart','SleepAverageDuration','SleepTypicalTime','SleepRangeChoice','SleepDetail')) { [void](Find-Control $sleepControl) }
+    $transform.Resize(1020,760)
+    Start-Sleep -Milliseconds 250
+    Assert-SleepFits
+    $transform.Resize(1200,880)
     (Find-Control 'Tab2').GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
     Write-Output 'PASS Sleep overview remains reachable after applying English'
     (Find-Control 'SettingsCategory2').GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()

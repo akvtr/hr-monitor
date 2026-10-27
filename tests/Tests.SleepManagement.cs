@@ -12,6 +12,7 @@ internal static partial class Tests
 
     private static void TestSleepManagement(string folder)
     {
+        Check(typeof(Store).GetMethod("DeleteSleepInterval") == null, "sleep records have no manual deletion API");
         Check(new Settings().SleepDayBoundaryHour == 12, "sleep day defaults to noon for overnight records");
         var preferences = new Settings { SleepDayBoundaryHour = 4 };
         string preferencePath = Path.Combine(folder, "sleep-management-settings.json"); preferences.Save(preferencePath);
@@ -58,9 +59,9 @@ internal static partial class Tests
                 "typical sleep times use longest continuous range medians relative to noon without midnight averaging errors");
             Check(analysis.Records.First().Summary.Count == 2 && analysis.Records.First().Summary.Average == 70,
                 "individual sleep records expose valid heart-rate statistics");
-            Check(!store.DeleteSleepInterval(ongoing.Id) && !store.SetSleepExcluded(ongoing.Id, true),
-                "ongoing sleep cannot be deleted or excluded underneath the recorder");
-            Check(!store.DeleteSleepInterval(long.MaxValue) && !store.SetSleepExcluded(long.MaxValue, true),
+            Check(!store.SetSleepExcluded(ongoing.Id, true),
+                "ongoing sleep cannot be excluded underneath the recorder");
+            Check(!store.SetSleepExcluded(long.MaxValue, true),
                 "sleep management reports missing records without creating metadata");
             Check(store.SetSleepExcluded(excluded.Id, false), "sleep exclusion can be restored without deleting a record");
             excluded.Excluded = true; excluded.To += 1000; store.SaveSleepInterval(excluded);
@@ -80,11 +81,11 @@ internal static partial class Tests
             Check(rows.Single(r => r.Id == excludedId).Excluded && rows.Single(r => r.Id == ongoingId).IsOngoing,
                 "exclusion and ongoing metadata survive database reopening without query side effects");
             reopened.CloseStaleSleepIntervals();
-            Check(!reopened.SleepIntervals(SleepUtc(4, 22), SleepUtc(5, 8)).Single().IsOngoing && reopened.DeleteSleepInterval(ongoingId),
-                "startup closes stale tracking markers and permits management of the finished record");
+            Check(!reopened.SleepIntervals(SleepUtc(4, 22), SleepUtc(5, 8)).Single().IsOngoing,
+                "startup closes stale tracking markers without removing the finished record");
             Check(reopened.Query(SleepUtc(1, 0), SleepUtc(6, 0)).Count == 9,
-                "deleting a sleep label preserves all heart-rate readings");
-            reopened.DeleteBefore(SleepUtc(4, 8));
+                "closing stale sleep markers preserves all heart-rate readings");
+            reopened.DeleteBefore(SleepUtc(5, 8));
             Check(reopened.SleepIntervals(SleepUtc(1, 0), SleepUtc(6, 0)).Count == 0,
                 "retention still deletes completed sleep records with management metadata");
         }
@@ -97,9 +98,10 @@ internal static partial class Tests
             tracker.Observe(null, 3000);
             var finished = store.SleepIntervals(0, 10000).Single();
             Check(!finished.IsOngoing && finished.To == 2000, "unknown sleep state closes recording at its last confirmed observation");
-            Check(store.DeleteSleepInterval(finished.Id), "finished sleep interval can be deleted");
+            store.DeleteBefore(3000);
+            Check(store.SleepIntervals(0, 10000).Count == 0, "finite retention still removes expired finished sleep intervals");
             finished.To = 4000; store.SaveSleepInterval(finished);
-            Check(store.SleepIntervals(0, 10000).Count == 0, "a stale recorder object cannot resurrect a deleted sleep interval");
+            Check(store.SleepIntervals(0, 10000).Count == 0, "a stale recorder object cannot resurrect a retention-pruned sleep interval");
             tracker.Observe(true, 5000); tracker.Observe(true, 6000); tracker.Close();
             Check(!store.SleepIntervals(0, 10000).Single().IsOngoing && store.SleepIntervals(0, 10000).Single().To == 6000,
                 "stopping tracking closes the marker without extending confirmed sleep");

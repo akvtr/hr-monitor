@@ -31,18 +31,6 @@ namespace HeartRateMonitor
                 } finally { Native.sqlite3_finalize(s); }
             }
         }
-        public bool DeleteSleepInterval(long id)
-        {
-            lock (gate) {
-                EnsureSleepManagement();
-                var s = Prepare("DELETE FROM sleep_intervals WHERE id=? AND NOT EXISTS(SELECT 1 FROM sleep_management WHERE sleep_id=? AND ongoing<>0);");
-                try {
-                    BindInt(s, 1, id); BindInt(s, 2, id);
-                    int rc = Native.sqlite3_step(s); if (rc != Native.Done) Check(rc);
-                    return Native.sqlite3_changes(db) != 0;
-                } finally { Native.sqlite3_finalize(s); }
-            }
-        }
         // Boundaries are converted separately, preserving actual elapsed time through DST changes.
         public static long SleepDayBoundary(DateTime day, TimeZoneInfo zone, int boundaryHour)
         {

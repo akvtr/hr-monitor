@@ -2,6 +2,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System;
 using System.Threading.Tasks;
+using System.Windows;
 
 namespace HeartRateMonitor
 {
@@ -52,6 +53,11 @@ namespace HeartRateMonitor
             foreach (var label in new[] { sleepSettingsStatus, sleepHistoryStatus, sleepManagementConnection }) if (label != null) {
                 label.Text = text; label.ToolTip = text + (string.IsNullOrEmpty(status?.Detail) ? "" : "\n" + status.Detail);
                 label.SetResourceReference(TextBlock.ForegroundProperty, state == "Error" || state == "Unavailable" ? "Warning" : state == "Sleeping" ? "Accent" : "TextMuted");
+            }
+            if (sleepManagementConnection != null && sleepStatus != null) {
+                bool warning = state == "Error" || state == "Unavailable";
+                sleepManagementConnection.Visibility = warning ? Visibility.Visible : Visibility.Collapsed;
+                sleepStatus.Visibility = warning ? Visibility.Collapsed : Visibility.Visible;
             }
         }
     }

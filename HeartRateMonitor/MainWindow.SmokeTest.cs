@@ -32,7 +32,7 @@ namespace HeartRateMonitor
                         if (i == 1) await RefreshHistory(true);
                         if (i == 2) {
                             await VerifySleepManagement();
-                            File.AppendAllText(checksPath, $"PASS {language}/{mode}: sleep metrics, valid heart-rate averages, exclusion/reinclusion persistence, History navigation, label deletion preserving readings and ongoing-record protection.{Environment.NewLine}");
+                            File.AppendAllText(checksPath, $"PASS {language}/{mode}: sleep metrics, timeline and keyboard selection load the exact heart-rate graph, empty data clears stale points, selection persists, long/custom periods and integration warnings fit one screen, and deletion/list actions are removed.{Environment.NewLine}");
                         }
                         await Task.Delay(150); UpdateLayout();
                         foreach (TabItem item in tabs.Items) {
