@@ -92,6 +92,7 @@ namespace HeartRateMonitor
         {
             if (connectionPopup != null) connectionPopup.IsOpen = false;
             int selectedPage = Math.Max(0, tabs?.SelectedIndex ?? 0);
+            sleepManagementRevision++; sleepDetailRevision++;
             historyRevision++; historyBoundsRevision++; historyDebounce.Stop();
             connection = Label(""); deviceTitle = Label(string.IsNullOrWhiteSpace(settings.LastName) ? T("心拍センサー", "Heart-rate sensor") : settings.LastName, 16, "Text");
             advice = Label("", 12); errorText = Label("", 12, "Danger");
@@ -172,12 +173,13 @@ namespace HeartRateMonitor
 
             tabs = new TabControl { TabStripPlacement = Dock.Left, Background = Brushes.Transparent, BorderThickness = new Thickness(0), Padding = new Thickness(0) };
             AutomationProperties.SetAutomationId(tabs, "MainTabs");
-            var views = new[] { LiveView(), HistoryView(), SettingsView() };
-            var names = new[] { T("ライブ", "Live"), T("履歴", "History"), T("設定", "Settings") };
-            var descriptions = new[] { T("ライブ心拍", "Live heart rate"), T("履歴・CSV出力", "History & CSV export"), T("設定", "Settings") };
+            var views = new[] { LiveView(), HistoryView(), SleepManagementView(), SettingsView() };
+            var names = new[] { T("ライブ", "Live"), T("履歴", "History"), T("睡眠", "Sleep"), T("設定", "Settings") };
+            var descriptions = new[] { T("ライブ心拍", "Live heart rate"), T("履歴・CSV出力", "History & CSV export"), T("睡眠管理", "Sleep management"), T("設定", "Settings") };
             var icons = new[] {
                 "M 1,8 L 4,8 6,3 9,13 11,8 15,8",
                 "M 2,2 L 2,14 15,14 M 5,10 L 8,6 11,8 15,3",
+                "M 11,1 A 7,7 0 1 0 15,11 A 6,6 0 0 1 11,1",
                 "M 2,4 L 14,4 M 2,12 L 14,12 M 6,1 L 6,7 M 10,9 L 10,15"
             };
             for (int i = 0; i < views.Length; i++) {
@@ -185,11 +187,12 @@ namespace HeartRateMonitor
                 icon.SetBinding(Shape.StrokeProperty, new System.Windows.Data.Binding("Foreground") { RelativeSource = new System.Windows.Data.RelativeSource(System.Windows.Data.RelativeSourceMode.FindAncestor, typeof(TabItem), 1) });
                 var label = new TextBlock { Text = names[i], VerticalAlignment = VerticalAlignment.Center };
                 var tab = new TabItem { Header = Horizontal(icon, label), Content = views[i], ToolTip = descriptions[i] };
-                AutomationProperties.SetAutomationId(tab, "Tab" + i); AutomationProperties.SetName(tab, descriptions[i]); tabs.Items.Add(tab);
+                AutomationProperties.SetAutomationId(tab, i == 2 ? "SleepTab" : "Tab" + (i == 3 ? 2 : i)); AutomationProperties.SetName(tab, descriptions[i]); tabs.Items.Add(tab);
             }
             tabs.SelectionChanged += async (s, e) => {
                 if (e.Source != tabs) return;
                 if (tabs.SelectedIndex == 1) await RefreshHistory(false);
+                if (tabs.SelectedIndex == 2) await RefreshSleepManagement();
             };
             Grid.SetRow(tabs, 1); root.Children.Add(tabs); errorText.MaxHeight = 45; errorText.Margin = new Thickness(2, 8, 0, 0); Grid.SetRow(errorText, 2); root.Children.Add(errorText);
             var shell = new DockPanel();

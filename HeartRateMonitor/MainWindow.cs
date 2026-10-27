@@ -58,8 +58,13 @@ namespace HeartRateMonitor
             FontFamily = new FontFamily("Segoe UI, Yu Gothic UI"); FontSize = 14;
             BuildUi();
             engine = new RecordingEngine(database, settings);
+            try { using (var store = new Store(database)) store.CloseStaleSleepIntervals(); }
+            catch (Exception ex) {
+                string message = T("睡眠記録の再開準備に失敗しました: ", "Could not prepare sleep recording: ") + ex.Message;
+                connectionLog.Add(message); errorText.Text = message;
+            }
             sleepMonitor = new OyasumiSleepMonitor(database, settings);
-            sleepMonitor.DataChanged += () => Ui(() => sleepHistoryDirty = true);
+            sleepMonitor.DataChanged += () => Ui(() => { sleepHistoryDirty = true; sleepManagementDirty = true; });
             sleepMonitor.StatusChanged += status => {
                 connectionLog.Add("OyasumiVR: " + status.State + (status.Detail.Length == 0 ? "" : " / " + status.Detail));
                 Ui(UpdateSleepStatus);
@@ -104,7 +109,7 @@ namespace HeartRateMonitor
             tray?.Dispose(); canClose = true;
         }
         private void ApplyTheme() { ApplyThemeTransition(false); }
-        private void ApplyThemeTransition(bool animate) { ThemeManager.Apply(this, settings.Theme, animate, () => { liveChart.InvalidateVisual(); historyChart.InvalidateVisual(); }); UpdateThemeIcon(animate); liveChart.InvalidateVisual(); historyChart.InvalidateVisual(); }
+        private void ApplyThemeTransition(bool animate) { ThemeManager.Apply(this, settings.Theme, animate, () => { liveChart.InvalidateVisual(); historyChart.InvalidateVisual(); sleepRhythm?.InvalidateVisual(); sleepDetailChart?.InvalidateVisual(); }); UpdateThemeIcon(animate); liveChart.InvalidateVisual(); historyChart.InvalidateVisual(); sleepRhythm?.InvalidateVisual(); sleepDetailChart?.InvalidateVisual(); }
         private void SystemThemeChanged(object sender, UserPreferenceChangedEventArgs e) { Ui(ApplyTheme); }
         private void SetState(ConnectionUpdate value)
         {
@@ -184,6 +189,7 @@ namespace HeartRateMonitor
         private void Tick()
         {
             UpdateSleepStatus();
+            if (!closing && tabs.SelectedIndex == 2 && !sleepManagementLoading && DateTime.UtcNow >= sleepManagementRefreshAt && (sleepManagementDirty || DateTime.UtcNow >= sleepManagementNextMinute)) _ = RefreshSleepManagement();
             if (sleepHistoryDirty && tabs.SelectedIndex == 1 && historyLoaded) {
                 if (!sleepHistoryLoading) { sleepHistoryDirty = false; _ = RefreshSleepHistory(); }
             }

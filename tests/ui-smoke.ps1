@@ -175,6 +175,31 @@ try {
     $dataGridCondition = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::DataGrid)
     if ($window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $dataGridCondition)) { throw 'A received readings table remains visible.' }
     Write-Output 'PASS history has no received readings table'
+    (Find-Control 'SleepTab').GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
+    Start-Sleep -Milliseconds 300
+    $sleepRange = Find-Control 'SleepRangeChoice'
+    $sleepRange.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
+    $customSleepCondition = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, '期間指定')
+    $customSleep = $sleepRange.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $customSleepCondition)
+    if (!$customSleep) { throw 'Custom sleep range was not available.' }
+    $customSleep.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
+    Start-Sleep -Milliseconds 100
+    foreach ($sleepControl in @('SleepAverageHeart','SleepAverageDuration','SleepTypicalTime','SleepRangeChoice','SleepFromDate','SleepToDate','SleepApplyRange')) { [void](Find-Control $sleepControl) }
+    $sleepDateValue = (Find-Control 'SleepFromDate').GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
+    $validSleepDate = $sleepDateValue.Current.Value
+    $sleepDateValue.SetValue('2020/02/30')
+    (Find-Control 'SleepApplyRange').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+    Start-Sleep -Milliseconds 150
+    if ((Find-Control 'SleepStatus').Current.Name -notmatch 'yyyy/MM/dd') { throw 'Invalid sleep dates need an inline validation message.' }
+    $sleepDateValue.SetValue($validSleepDate)
+    (Find-Control 'SleepApplyRange').GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+    Start-Sleep -Milliseconds 150
+    $sleepPeriod = (Find-Control 'SleepRangeChoice').GetCurrentPattern([System.Windows.Automation.SelectionPattern]::Pattern).Current.GetSelection()[0].Current.Name
+    (Find-Control 'Tab1').GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
+    (Find-Control 'SleepTab').GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
+    Start-Sleep -Milliseconds 150
+    if ((Find-Control 'SleepRangeChoice').GetCurrentPattern([System.Windows.Automation.SelectionPattern]::Pattern).Current.GetSelection()[0].Current.Name -ne $sleepPeriod) { throw 'Returning to Sleep changed its period selector.' }
+    Write-Output 'PASS Sleep navigation exposes all three overview metrics and period controls'
     (Find-Control 'Tab2').GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
     function Select-Retention([string]$label) {
         $retention = Find-Control 'RetentionChoice'
@@ -223,6 +248,11 @@ try {
     if ((Find-Control 'SaveSettings').Current.Name -ne 'Save & apply') { throw 'English UI was not applied immediately.' }
     if ((Get-Content -Raw -Encoding UTF8 (Join-Path $dataPath 'settings.json') | ConvertFrom-Json).Language -ne 'en') { throw 'English language not persisted.' }
     Write-Output 'PASS English applies immediately and persists'
+    (Find-Control 'SleepTab').GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
+    Start-Sleep -Milliseconds 250
+    foreach ($sleepControl in @('SleepAverageHeart','SleepAverageDuration','SleepTypicalTime','SleepRangeChoice')) { [void](Find-Control $sleepControl) }
+    (Find-Control 'Tab2').GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
+    Write-Output 'PASS Sleep overview remains reachable after applying English'
     (Find-Control 'SettingsCategory2').GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
     $selectedRetention = (Find-Control 'RetentionChoice').GetCurrentPattern([System.Windows.Automation.SelectionPattern]::Pattern).Current.GetSelection()
     if ($selectedRetention[0].Current.Name -ne '7 days') { throw 'Retention selection was lost during language change.' }

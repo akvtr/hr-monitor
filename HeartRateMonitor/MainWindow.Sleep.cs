@@ -49,7 +49,7 @@ namespace HeartRateMonitor
                 : state == "Waiting" ? T("検出待ち · OyasumiVRのOSCを有効にしてください", "Waiting · enable OSC in OyasumiVR")
                 : state == "Unavailable" ? T("状態を取得できません · 睡眠は記録しません", "State unavailable · sleep is not recorded")
                 : T("連携・保存エラー · 睡眠は記録しません", "Integration/storage error · sleep is not recorded"));
-            foreach (var label in new[] { sleepSettingsStatus, sleepHistoryStatus }) if (label != null) {
+            foreach (var label in new[] { sleepSettingsStatus, sleepHistoryStatus, sleepManagementConnection }) if (label != null) {
                 label.Text = text; label.ToolTip = text + (string.IsNullOrEmpty(status?.Detail) ? "" : "\n" + status.Detail);
                 label.SetResourceReference(TextBlock.ForegroundProperty, state == "Error" || state == "Unavailable" ? "Warning" : state == "Sleeping" ? "Accent" : "TextMuted");
             }

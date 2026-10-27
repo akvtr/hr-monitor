@@ -84,6 +84,12 @@ An interval starts at the first confirmed enabled observation and ends when mode
 
 Sleep labels remain selectable and visible in History even outside heart-rate recording times. Readings, statistics, and sample CSV columns are unchanged. Sleep labels are not included in CSV and are stored in the same database for full-directory backup. Manual note/interval creation, editing, and search have been removed. Existing manual annotation tables are preserved but never displayed or converted into sleep labels.
 
+The **Sleep** sidebar page shows average sleeping heart rate, average sleep duration, and typical sleep hours for 7 days, 30 days, or a custom range of up to 366 days. Daily horizontal bars show only observed intervals; communication gaps are never filled. Dates identify the day on which the sleep-day boundary begins. The default is noon to the following noon; change it under **Settings → OyasumiVR integration → Sleep day starts at**.
+
+Average sleep duration is the sum of observed time per day divided by the number of days with records. Intervals crossing the selected boundaries count only within the range, and overlaps are counted once. Missing days are omitted instead of counted as zero; ongoing and excluded intervals are omitted from averages. Sleeping heart rate is the mean of valid recorded samples within included intervals, without weighting by sampling interval. Missing heart-rate data displays “—”. Separate counts show how many days contributed sleep and heart-rate data. Typical sleep hours are the median start and end times of each day's longest continuous record. Use the timeline alongside these values when gaps split a night's records or when naps are present.
+
+Select a sleep record to see its start, end, duration, minimum/average/maximum heart rate, valid sample count, and heart-rate chart. **Open in History** opens the same interval. Finished sleep labels can be excluded from summaries, included again, or permanently deleted after confirmation. Exclusion retains the original label; deleting a label keeps heart-rate recordings. **Sleep label deletion cannot be undone.** Ongoing intervals cannot be excluded or deleted.
+
 With finite retention, sleep labels ending at or before the cutoff are permanently deleted too. Intervals crossing the cutoff keep their original timestamps. **Deletion is irreversible.**
 
 Shutdown waits for accepted readings to be saved and for any CSV export in progress to finish. Large exports can therefore delay exit.

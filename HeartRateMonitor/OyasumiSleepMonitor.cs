@@ -65,7 +65,7 @@ namespace HeartRateMonitor
                         request = CancellationTokenSource.CreateLinkedTokenSource(stopping.Token);
                     }
                     try {
-                        if (generation != currentRevision) { tracker = null; cachedPort = 0; generation = currentRevision; }
+                        if (generation != currentRevision) { CloseTracker(ref tracker); cachedPort = 0; generation = currentRevision; }
                         if (!current.OyasumiEnabled) Publish("Disabled");
                         else {
                             bool? asleep = null; Exception failure = null;
@@ -78,7 +78,7 @@ namespace HeartRateMonitor
                             lock (gate) {
                                 if (currentRevision != revision || stopping.IsCancellationRequested) continue;
                                 if (!asleep.HasValue) {
-                                    tracker = null; cachedPort = 0;
+                                    CloseTracker(ref tracker); cachedPort = 0;
                                     Publish(failure == null ? "Waiting" : "Unavailable", failure?.Message ?? "");
                                 } else {
                                     Observe(asleep.Value, ref tracker);
@@ -86,9 +86,13 @@ namespace HeartRateMonitor
                                 }
                             }
                         }
-                    } catch (OperationCanceledException) { tracker = null; }
+                    } catch (OperationCanceledException) {
+                        try { CloseTracker(ref tracker); }
+                        catch (Exception ex) { Publish("Error", ex.Message); }
+                    }
                     catch (Exception ex) {
-                        tracker = null; cachedPort = 0;
+                        try { CloseTracker(ref tracker); } catch { }
+                        cachedPort = 0;
                         lock (gate) {
                             // Discovery is synchronous and may fail after its request was canceled.
                             if (currentRevision == revision && !stopping.IsCancellationRequested) Publish("Error", ex.Message);
@@ -100,7 +104,20 @@ namespace HeartRateMonitor
                     try { await Task.Delay(interval, stopping.Token).ConfigureAwait(false); }
                     catch (OperationCanceledException) { break; }
                 }
-            } finally { observationStore?.Dispose(); observationStore = null; }
+            } finally {
+                try { CloseTracker(ref tracker); }
+                catch (Exception ex) { Publish("Error", ex.Message); }
+                finally { observationStore?.Dispose(); observationStore = null; }
+            }
+        }
+        private void CloseTracker(ref SleepIntervalTracker tracker)
+        {
+            try {
+                if (tracker == null) return;
+                tracker.Close();
+                try { DataChanged?.Invoke(); } catch { }
+            }
+            finally { tracker = null; }
         }
         private Store observationStore;
         private void Observe(bool asleep, ref SleepIntervalTracker tracker)

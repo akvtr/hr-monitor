@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using System.Linq;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -48,6 +49,8 @@ namespace HeartRateMonitor
             closeToTray = Check(T("閉じるボタンでタスクトレイに格納", "Keep running in the tray when closed"), settings.CloseToTray);
             oyasumiEnabled = Check(T("OyasumiVRの睡眠モードで睡眠ラベルを自動記録", "Record sleep labels from OyasumiVR sleep mode"), settings.OyasumiEnabled);
             oyasumiPort = Input(settings.OyasumiQueryPort.ToString());
+            sleepBoundaryChoice = Choice(System.Linq.Enumerable.Range(0, 24).Select(hour => hour.ToString("00") + ":00").ToArray(), settings.SleepDayBoundaryHour, 160);
+            AutomationProperties.SetAutomationId(sleepBoundaryChoice, "SleepDayBoundary");
             AutomationProperties.SetAutomationId(oyasumiEnabled, "OyasumiEnabled");
             AutomationProperties.SetAutomationId(oyasumiPort, "OyasumiQueryPort");
             sleepSettingsStatus = Label("", 12); AutomationProperties.SetAutomationId(sleepSettingsStatus, "OyasumiStatus");
@@ -90,7 +93,8 @@ namespace HeartRateMonitor
             var sensorSection = Stack(Heading(T("心拍センサー", "Heart-rate sensor")), autoConnect, autoReconnect);
             var oyasumiSection = Stack(Heading(T("OyasumiVR連携", "OyasumiVR integration")), oyasumiEnabled,
                 Field(T("OSCQueryポート（0で自動検出）", "OSCQuery port (0 for automatic discovery)"), oyasumiPort),
-                Label(T("同じPCのOyasumiVRでOSCを有効にしてください。2秒ごとに確認し、取得不能な間は睡眠に含めません。", "Enable OSC in OyasumiVR on this PC. Checks every 2 seconds; unavailable periods are excluded."), 12), sleepSettingsStatus);
+                Label(T("同じPCのOyasumiVRでOSCを有効にしてください。2秒ごとに確認し、取得不能な間は睡眠に含めません。", "Enable OSC in OyasumiVR on this PC. Checks every 2 seconds; unavailable periods are excluded."), 12), sleepSettingsStatus,
+                new Border { Height = 12 }, Field(T("睡眠の一日の区切り", "Sleep day starts at"), sleepBoundaryChoice));
             var storageSection = Stack(Heading(T("データ保存", "Data storage")), Field(T("保存期間", "Retention period"), retentionChoice), retentionHelp,
                 new Border { Height = 18 }, Label(T("データ保存先", "Data location"), 12, "Text"), storageLocation);
             var sections = new Grid { VerticalAlignment = VerticalAlignment.Top };
@@ -141,6 +145,7 @@ namespace HeartRateMonitor
                 next.OyasumiEnabled = oyasumiEnabled.IsChecked == true;
                 if (!int.TryParse(oyasumiPort.Text, out value)) throw new ArgumentException(T("OSCQueryポートは整数で入力してください。", "OSCQuery port must be an integer."));
                 next.OyasumiQueryPort = value;
+                next.SleepDayBoundaryHour = sleepBoundaryChoice.SelectedIndex;
                 next.Validate(); next.Save(settingsPath); settings = next; engine.Configure(next); sleepMonitor.Configure(next); Words.Language = next.Language;
                 BuildUi(); ApplyThemeTransition(true); tray?.Refresh(); Tick(); settingsStatus.Text = T("設定を保存・適用しました。", "Settings saved and applied.");
             } catch (Exception ex) { settingsStatus.Text = T("保存できません: ", "Could not save: ") + ex.Message; }

@@ -27,9 +27,13 @@ namespace HeartRateMonitor
                 foreach (var language in new[] { "ja", "en" }) foreach (var mode in new[] { "Dark", "Light", "System" }) {
                     settings.Language = language; settings.Theme = mode; settings.Save(settingsPath);
                     Words.Language = language; BuildUi(); ApplyTheme();
-                    for (int i = 0; i < 3; i++) {
+                    for (int i = 0; i < 4; i++) {
                         tabs.SelectedIndex = i;
                         if (i == 1) await RefreshHistory(true);
+                        if (i == 2) {
+                            await VerifySleepManagement();
+                            File.AppendAllText(checksPath, $"PASS {language}/{mode}: sleep metrics, valid heart-rate averages, exclusion/reinclusion persistence, History navigation, label deletion preserving readings and ongoing-record protection.{Environment.NewLine}");
+                        }
                         await Task.Delay(150); UpdateLayout();
                         foreach (TabItem item in tabs.Items) {
                             var header = (StackPanel)item.Header;
@@ -62,9 +66,9 @@ namespace HeartRateMonitor
                         if (Math.Abs(tabs.ActualWidth - pageWidth) > 0.1 || Math.Abs(tabs.ActualHeight - pageHeight) > 0.1)
                             throw new InvalidOperationException("Closing connection details must preserve page size.");
                         File.AppendAllText(checksPath, $"PASS {language}/{mode}/tab-{i}: details popup preserves window and page dimensions, active theme surface.{Environment.NewLine}");
-                        if (i == 2) {
-                            if (tabs.Items.Count != 3 || tabs.SelectedIndex != 2)
-                                throw new InvalidOperationException("Settings must remain the third tab.");
+                        if (i == 3) {
+                            if (tabs.Items.Count != 4 || tabs.SelectedIndex != 3)
+                                throw new InvalidOperationException("Settings must follow Live, History and Sleep.");
                             if (!closeToTray.IsDescendantOf(settingsSections[0]) || !autoConnect.IsDescendantOf(settingsSections[1]) ||
                                 !autoReconnect.IsDescendantOf(settingsSections[1]) || !retentionChoice.IsDescendantOf(settingsSections[2]) ||
                                 !oyasumiEnabled.IsDescendantOf(settingsSections[3]) || !oyasumiPort.IsDescendantOf(settingsSections[3]) ||
@@ -91,14 +95,14 @@ namespace HeartRateMonitor
                             }
                             host.Text = previousHost;
                             File.AppendAllText(checksPath, $"PASS {language}/{mode}: all seven settings categories replace content, fit without scrolling, keep navigation fixed and preserve unsaved edits.{Environment.NewLine}");
-                            var selected = (TabItem)tabs.Items[2]; selected.ApplyTemplate();
+                            var selected = (TabItem)tabs.Items[3]; selected.ApplyTemplate();
                             var selectedShell = (Border)selected.Template.FindName("Shell", selected);
                             var selectedLine = (Border)selected.Template.FindName("SelectedLine", selected);
                             if (!ReferenceEquals(selectedShell.Background, FindResource("AccentSoft")) || !ReferenceEquals(selected.Foreground, FindResource("Text")) || selectedLine.Visibility != Visibility.Visible)
                                 throw new InvalidOperationException("Selected tab must have a soft fill, readable text and a selection line.");
                             NavigateSettings(4);
                             host.Text = "127.0.0.2";
-                            tabs.SelectedIndex = 0; await Task.Delay(50); tabs.SelectedIndex = 2; await Task.Delay(80); UpdateLayout();
+                            tabs.SelectedIndex = 0; await Task.Delay(50); tabs.SelectedIndex = 3; await Task.Delay(80); UpdateLayout();
                             if (host.Text != "127.0.0.2" || settingsCategory != 4 || !settingsSections[4].IsVisible)
                                 throw new InvalidOperationException("Switching tabs lost unsaved settings or the selected category.");
                             host.Text = previousHost;
@@ -137,7 +141,7 @@ namespace HeartRateMonitor
                             if (oscTimeoutSeconds.IsEnabled || oscTimeoutInt.IsEnabled || oscTimeoutFloat.IsEnabled) throw new InvalidOperationException("Keep-last mode must disable the interval and fallback fields.");
                             SaveClicked(null, null); await Task.Delay(80); UpdateLayout();
                             if (Settings.Load(settingsPath).OscZeroOnTimeout) throw new InvalidOperationException("Keep-last mode must persist.");
-                            if (tabs.SelectedIndex != 2 || settingsCategory != 5 || !settingsSections[5].IsVisible || settingsLinks[5].IsChecked != true)
+                            if (tabs.SelectedIndex != 3 || settingsCategory != 5 || !settingsSections[5].IsVisible || settingsLinks[5].IsChecked != true)
                                 throw new InvalidOperationException("Saving settings lost the selected tab or category.");
                             File.AppendAllText(checksPath, $"PASS {language}/{mode}: category retained across tabs and save, OSC timeout and custom fallback values persist, invalid interval and fallback values rejected, fields enabled only in fallback mode.{Environment.NewLine}");
                             NavigateSettings(0);

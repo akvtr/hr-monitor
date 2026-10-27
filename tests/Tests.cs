@@ -99,6 +99,7 @@ internal static partial class Tests
             TestStoreTextRoundTrip(folder);
             TestStoreTextValidation(folder);
             TestOyasumiSleep(folder);
+            TestSleepManagement(folder);
             TestOyasumiDiscoveryCancellation(folder);
             TestRetentionBoundary(folder);
             TestStartupRetention(folder);

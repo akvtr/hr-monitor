@@ -19,35 +19,48 @@ namespace HeartRateMonitor
                 } finally { Native.sqlite3_finalize(s); }
             }
         }
-        internal void SaveSleepInterval(SleepInterval interval)
+        internal bool SaveSleepInterval(SleepInterval interval)
         {
             if (interval == null) throw new ArgumentNullException(nameof(interval));
             DateTimeOffset.FromUnixTimeMilliseconds(interval.From); DateTimeOffset.FromUnixTimeMilliseconds(interval.To);
             if (interval.To < interval.From) throw new ArgumentException("Sleep interval end must not precede start.");
-            lock (gate) {
+            return ReadSnapshot(() => {
                 var s = Prepare(interval.Id == 0 ? "INSERT INTO sleep_intervals(from_ms,to_ms) VALUES(?,?);"
                     : "UPDATE sleep_intervals SET from_ms=?,to_ms=? WHERE id=?;");
                 try {
                     BindInt(s, 1, interval.From); BindInt(s, 2, interval.To);
                     if (interval.Id != 0) BindInt(s, 3, interval.Id);
                     int rc = Native.sqlite3_step(s); if (rc != Native.Done) Check(rc);
-                    // Retention may have removed an old active interval while observation was suspended.
+                    // A removed interval must never be resurrected by a stale tracker object.
                     if (interval.Id != 0 && Native.sqlite3_changes(db) == 0) {
-                        interval.Id = 0; SaveSleepInterval(interval); return;
+                        return false;
                     }
                     if (interval.Id == 0) interval.Id = Native.sqlite3_last_insert_rowid(db);
                 } finally { Native.sqlite3_finalize(s); }
-            }
+                var state = Prepare("INSERT OR IGNORE INTO sleep_management(sleep_id,excluded,ongoing) VALUES(?,?,?);");
+                try {
+                    BindInt(state, 1, interval.Id); BindInt(state, 2, interval.Excluded ? 1 : 0); BindInt(state, 3, interval.IsOngoing ? 1 : 0);
+                    int rc = Native.sqlite3_step(state); if (rc != Native.Done) Check(rc);
+                } finally { Native.sqlite3_finalize(state); }
+                state = Prepare("UPDATE sleep_management SET ongoing=? WHERE sleep_id=?;");
+                try {
+                    BindInt(state, 1, interval.IsOngoing ? 1 : 0); BindInt(state, 2, interval.Id);
+                    int rc = Native.sqlite3_step(state); if (rc != Native.Done) Check(rc);
+                } finally { Native.sqlite3_finalize(state); }
+                return true;
+            });
         }
         public List<SleepInterval> SleepIntervals(long from, long to)
         {
             lock (gate) {
+                EnsureSleepManagement();
                 var result = new List<SleepInterval>();
-                var s = Prepare("SELECT id,from_ms,to_ms FROM sleep_intervals WHERE from_ms<? AND to_ms>? AND to_ms>from_ms AND ?<? ORDER BY from_ms,id;");
+                var s = Prepare("SELECT i.id,i.from_ms,i.to_ms,COALESCE(m.excluded,0),COALESCE(m.ongoing,0) FROM sleep_intervals i LEFT JOIN sleep_management m ON m.sleep_id=i.id WHERE i.from_ms<? AND i.to_ms>? AND i.to_ms>i.from_ms AND ?<? ORDER BY i.from_ms,i.id;");
                 try {
                     BindInt(s, 1, to); BindInt(s, 2, from); BindInt(s, 3, from); BindInt(s, 4, to); int rc;
                     while ((rc = Native.sqlite3_step(s)) == Native.Row)
-                        result.Add(new SleepInterval { Id = Native.sqlite3_column_int64(s, 0), From = Native.sqlite3_column_int64(s, 1), To = Native.sqlite3_column_int64(s, 2) });
+                        result.Add(new SleepInterval { Id = Native.sqlite3_column_int64(s, 0), From = Native.sqlite3_column_int64(s, 1), To = Native.sqlite3_column_int64(s, 2),
+                            Excluded = Native.sqlite3_column_int64(s, 3) != 0, IsOngoing = Native.sqlite3_column_int64(s, 4) != 0 });
                     if (rc != Native.Done) Check(rc); return result;
                 } finally { Native.sqlite3_finalize(s); }
             }

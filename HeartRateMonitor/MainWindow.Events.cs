@@ -33,7 +33,7 @@ namespace HeartRateMonitor
                 connectionLog.Add(retentionError);
                 errorText.Text = retentionError;
             }
-            engine.RetentionChanged += () => Ui(() => { if (tabs.SelectedIndex == 1) _ = RefreshHistory(false); });
+            engine.RetentionChanged += () => Ui(() => { sleepManagementDirty = true; if (tabs.SelectedIndex == 1) _ = RefreshHistory(false); });
             engine.OscFailed += message => {
                 connectionLog.Add("OSC: " + message);
                 Ui(() => { oscFailure = message; UpdateOsc(); });
