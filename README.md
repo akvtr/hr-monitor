@@ -1,4 +1,4 @@
-# Heart Rate Monitor 0.21.0
+# Heart Rate Monitor 0.22.0
 
 標準BLE Heart Rate Service対応センサーの心拍を受信し、SQLiteに記録してグラフで確認できるWindowsデスクトップアプリです。VRChat向けOSC送信、CSV出力、日本語・英語UI、Light・Dark・Systemテーマ、タスクトレイ常駐に対応しています。外部アカウントは不要です。
 
