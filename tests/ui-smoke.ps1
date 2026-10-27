@@ -154,6 +154,12 @@ try {
             $rect = $control.Current.BoundingRectangle
             if ($rect.IsEmpty -or $rect.Width -le 0 -or $rect.Height -le 0 -or $rect.Left -lt $bounds.Left - 1 -or $rect.Top -lt $bounds.Top - 1 -or $rect.Right -gt $bounds.Right + 1 -or $rect.Bottom -gt $bounds.Bottom + 1) { throw ('History control does not fit: ' + $id + ' ' + $rect + ' within ' + $bounds) }
         }
+        $date = (Find-Control 'HistoryJumpDate').Current.BoundingRectangle
+        $time = (Find-Control 'HistoryJumpTime').Current.BoundingRectangle
+        $jump = (Find-Control 'HistoryJump').Current.BoundingRectangle
+        $month = (Find-Control 'ActivityThisMonth').Current.BoundingRectangle
+        if ([Math]::Abs($date.Top - $time.Top) -gt 1 -or $date.Right -ge $time.Left -or $month.Right -ge $date.Left) { throw 'Calendar and date/time fields overlap or are misaligned.' }
+        if ([Math]::Abs($jump.Left - $date.Left) -gt 1 -or [Math]::Abs($jump.Right - $time.Right) -gt 1 -or $jump.Top -lt $date.Bottom) { throw 'Date/time action must fill the field row width below both inputs.' }
     }
     Assert-HistoryFits
     $transform = $window.GetCurrentPattern([System.Windows.Automation.TransformPattern]::Pattern)

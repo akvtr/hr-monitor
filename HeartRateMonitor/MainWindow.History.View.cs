@@ -78,10 +78,10 @@ namespace HeartRateMonitor
             var footerActions = new DockPanel(); DockPanel.SetDock(csvActions, Dock.Right); footerActions.Children.Add(csvActions); footerActions.Children.Add(Stack(retention, sleepHistoryStatus));
             exportStatus.Margin = new Thickness(0, 4, 0, 0);
             var grid = new Grid(); grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); grid.RowDefinitions.Add(new RowDefinition()); grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            var navigation = new Grid(); navigation.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(420) }); navigation.ColumnDefinitions.Add(new ColumnDefinition());
+            var navigation = new Grid(); navigation.ColumnDefinitions.Add(new ColumnDefinition()); navigation.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) }); navigation.ColumnDefinitions.Add(new ColumnDefinition());
             navigation.Children.Add(activityCalendar);
-            var dateControls = HistoryDateControls(); Grid.SetColumn(dateControls, 1);
-            ((FrameworkElement)dateControls).Margin = new Thickness(28, 0, 0, 0); navigation.Children.Add(dateControls);
+            var dateControls = HistoryDateControls(); Grid.SetColumn(dateControls, 2);
+            navigation.Children.Add(dateControls);
             var activityCard = Card(navigation, new Thickness(18)); activityCard.Margin = new Thickness(0, 0, 0, 10); grid.Children.Add(activityCard);
             var plotCard = Card(plotGrid, new Thickness(18)); Grid.SetRow(plotCard, 1); grid.Children.Add(plotCard);
             var footer = Stack(footerActions, exportStatus); footer.Margin = new Thickness(2, 8, 2, 0); Grid.SetRow(footer, 2); grid.Children.Add(footer);
