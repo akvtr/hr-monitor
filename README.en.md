@@ -1,4 +1,4 @@
-# Heart Rate Monitor 0.22.0
+# Heart Rate Monitor 0.23.0
 
 A Windows desktop app that receives standard BLE heart-rate notifications, stores readings in SQLite, and displays live and historical charts. It supports VRChat OSC output, CSV export, Japanese/English UI, Light/Dark/System themes, and tray residency. No external account is required.
 
