@@ -17,6 +17,7 @@ namespace HeartRateMonitor
         public long GapMs = 15000;
         public double? Average;
         public bool ShowDateLabels;
+        public bool ShowMidnightSeparators;
         private double PlotBottom => ActualHeight - (ShowDateLabels ? 72 : 52);
         private Point pointer;
         private bool pointerInside;
@@ -74,7 +75,7 @@ namespace HeartRateMonitor
                 }
                 dc.DrawText(time, new Point(Math.Max(left, Math.Min(left + width - time.Width, x(t) - time.Width / 2)), top + height + 10));
             }
-            if (valid.Count == 0) { Text(dc, Words.T("この期間にデータはありません", "No samples in this window"), left + 18, top + height / 2 - 8); DrawSelection(dc, left, top, width, height, min, max); return; }
+            if (valid.Count == 0) { DrawMidnightSeparators(dc, left, top, width, height); Text(dc, Words.T("この期間にデータはありません", "No samples in this window"), left + 18, top + height / 2 - 8); DrawSelection(dc, left, top, width, height, min, max); return; }
             var pen = FrozenPen(accent, 2);
             var rangeBrush = accent.Clone(); rangeBrush.Opacity = 0.22;
             var range = FrozenPen(rangeBrush, 1);
@@ -95,6 +96,7 @@ namespace HeartRateMonitor
                 previous = p;
             }
 
+            DrawMidnightSeparators(dc, left, top, width, height);
             if (showAverage) {
                 var label = new FormattedText(Words.T($"平均 {Average.Value:0.0} bpm", $"Avg {Average.Value:0.0} bpm"), CultureInfo.CurrentCulture, FlowDirection.LeftToRight, new Typeface("Segoe UI, Yu Gothic UI"), 12, ink, VisualTreeHelper.GetDpi(this).PixelsPerDip);
                 double boxX = Math.Max(left, left + width - label.Width - 8);

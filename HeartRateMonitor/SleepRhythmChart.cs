@@ -15,11 +15,11 @@ namespace HeartRateMonitor
         public List<SleepInterval> Intervals = new List<SleepInterval>();
         public DateTime FirstDay = DateTime.Today.AddDays(-6);
         public DateTime LastDay = DateTime.Today;
-        public int BoundaryHour = 12;
+        public int BoundaryHour;
         public TimeZoneInfo Zone = TimeZoneInfo.Local;
         public long? SelectedId;
         public event Action<long> IntervalSelected;
-        private const double RowHeight = 26, HeaderHeight = 24, Left = 94, Right = 20;
+        private const double RowHeight = 26, Left = 94, Right = 20;
         private readonly List<Segment> segments = new List<Segment>();
 
         private sealed class Segment
@@ -83,7 +83,8 @@ namespace HeartRateMonitor
         protected override Size MeasureOverride(Size availableSize)
         {
             int count = Math.Max(1, Math.Min(7, (LastDay.Date - FirstDay.Date).Days + 1));
-            double desiredHeight = HeaderHeight + RowHeight * count + 4;
+            double plotWidth = (double.IsInfinity(availableSize.Width) ? 600 : availableSize.Width) - Left - Right;
+            double desiredHeight = HeaderHeight(plotWidth) + RowHeight * count + 4;
             return new Size(double.IsInfinity(availableSize.Width) ? 600 : availableSize.Width,
                 double.IsInfinity(availableSize.Height) ? desiredHeight : Math.Min(desiredHeight, availableSize.Height));
         }
@@ -114,6 +115,32 @@ namespace HeartRateMonitor
         {
             long duration = Store.SleepDayBoundary(day.AddDays(1), Zone, BoundaryHour) - Store.SleepDayBoundary(day, Zone, BoundaryHour);
             return duration == 86400000 ? RowHeight : RowHeight + 20;
+        }
+
+        internal double MidnightPosition(DateTime day)
+        {
+            long from = Store.SleepDayBoundary(day, Zone, BoundaryHour), to = Store.SleepDayBoundary(day.AddDays(1), Zone, BoundaryHour);
+            long midnight = Store.SleepDayBoundary(day.AddDays(1), Zone, 0);
+            return Math.Max(0, Math.Min(1, (midnight - from) / (double)Math.Max(1, to - from)));
+        }
+
+        private FormattedText MidnightLabel(Brush brush, double size)
+        {
+            return new FormattedText(Words.T("00:00 翌日", "00:00 +1d"), CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
+                new Typeface("Segoe UI, Yu Gothic UI"), size, brush, VisualTreeHelper.GetDpi(this).PixelsPerDip);
+        }
+
+        private bool MidnightOverlapsEndpoint(double labelX, double labelWidth, double plotWidth)
+        {
+            return BoundaryHour != 0 && (labelX < Left + 22 || labelX + labelWidth > Left + plotWidth - 18);
+        }
+
+        private double HeaderHeight(double plotWidth)
+        {
+            var label = MidnightLabel(Brushes.Gray, 11);
+            double x = Left + ((24 - BoundaryHour) / 24.0) * plotWidth;
+            double labelX = Math.Max(Left, Math.Min(Left + plotWidth - label.Width, x - label.Width / 2));
+            return MidnightOverlapsEndpoint(labelX, label.Width, plotWidth) ? 38 : 24;
         }
 
         private Segment Hit(Point point) => segments.LastOrDefault(segment => segment.Bounds.Contains(point));
@@ -147,25 +174,38 @@ namespace HeartRateMonitor
             var ink = Brush("TextMuted", Brushes.Gray);
             var grid = new Pen(Brush("ChartGrid", Brushes.LightGray), 0.7);
             var accent = Brush("Accent", Brushes.Teal);
+            var midnightPen = new Pen(Brush("TextMuted", ink), 1.3) { DashStyle = DashStyles.Dash };
             if (IsKeyboardFocusWithin && ActualWidth > 2 && ActualHeight > 2)
                 dc.DrawRectangle(null, new Pen(Brush("Focus", accent), 1), new Rect(1, 1, ActualWidth - 2, ActualHeight - 2));
             // Rows use actual elapsed time between local day boundaries. Their hour ticks
             // are converted separately, keeping daylight-saving days truthful as well.
             int step = width < 400 ? 6 : 4;
+            var midnightLabel = MidnightLabel(ink, 11);
+            double midnightHeaderX = Left + ((24 - BoundaryHour) / 24.0) * width;
+            double midnightLabelX = Math.Max(Left, Math.Min(Left + width - midnightLabel.Width, midnightHeaderX - midnightLabel.Width / 2));
+            double headerHeight = HeaderHeight(width);
+            bool secondHeaderLine = headerHeight > 24;
             for (int hour = 0; hour <= 24; hour += step) {
                 double x = Left + hour / 24.0 * width;
-                dc.DrawLine(grid, new Point(x, HeaderHeight - 3), new Point(x, HeaderHeight));
-                Text(dc, ((BoundaryHour + hour) % 24).ToString("00") + ":00", Math.Max(Left - 14, Math.Min(ActualWidth - 34, x - 14)), 5, ink);
+                dc.DrawLine(grid, new Point(x, headerHeight - 3), new Point(x, headerHeight));
+                double labelX = Math.Max(Left - 14, Math.Min(ActualWidth - 34, x - 14));
+                if (secondHeaderLine || labelX + 32 < midnightLabelX - 4 || labelX > midnightLabelX + midnightLabel.Width + 4)
+                    Text(dc, ((BoundaryHour + hour) % 24).ToString("00") + ":00", labelX, 5, ink);
             }
+            dc.DrawText(midnightLabel, new Point(midnightLabelX, secondHeaderLine ? 20 : 5));
             bool visible = false;
-            double y = HeaderHeight;
+            double y = headerHeight;
             double naturalHeight = 0;
             for (int i = 0; i < count; i++) naturalHeight += DayHeight(FirstDay.Date.AddDays(i));
-            double scale = Math.Max(0, ActualHeight - HeaderHeight - 4) / naturalHeight;
+            double scale = Math.Max(0, ActualHeight - headerHeight - 4) / naturalHeight;
             for (int i = 0; i < count; i++) {
                 var day = FirstDay.Date.AddDays(i);
                 long from = Store.SleepDayBoundary(day, Zone, BoundaryHour), to = Store.SleepDayBoundary(day.AddDays(1), Zone, BoundaryHour);
                 bool shifted = to - from != 86400000;
+                double midnightX = Left + MidnightPosition(day) * width;
+                var shiftedMidnightLabel = shifted ? MidnightLabel(ink, 9) : null;
+                double shiftedLabelX = shifted ? Math.Max(Left, Math.Min(Left + width - shiftedMidnightLabel.Width, midnightX - shiftedMidnightLabel.Width / 2)) : 0;
+                bool showShiftedMidnightLabel = shifted && !MidnightOverlapsEndpoint(shiftedLabelX, shiftedMidnightLabel.Width, width);
                 double rowHeight = (shifted ? RowHeight + 20 : RowHeight) * scale;
                 double labelHeight = shifted ? Math.Min(16, rowHeight * 0.45) : 0;
                 double barHeight = Math.Max(4, Math.Min(14, rowHeight - labelHeight - 4));
@@ -181,7 +221,9 @@ namespace HeartRateMonitor
                     dc.DrawLine(grid, new Point(x, y + labelHeight), new Point(x, y + rowHeight));
                     if (shifted) {
                         string label = TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeMilliseconds(tick), Zone).ToString("HH:mm");
-                        Text(dc, label, Math.Max(Left - 14, Math.Min(ActualWidth - 34, x - 14)), y + 1, ink, 9);
+                        double labelX = Math.Max(Left - 14, Math.Min(ActualWidth - 34, x - 14));
+                        if (!showShiftedMidnightLabel || labelX + 28 < shiftedLabelX - 4 || labelX > shiftedLabelX + shiftedMidnightLabel.Width + 4)
+                            Text(dc, label, labelX, y + 1, ink, 9);
                     }
                 }
                 foreach (var interval in Intervals) {
@@ -199,9 +241,11 @@ namespace HeartRateMonitor
                     var hit = new Rect(hitLeft, y + labelHeight, Math.Max(0, hitRight - hitLeft), Math.Max(0, rowHeight - labelHeight));
                     segments.Add(new Segment { Bounds = hit, Interval = interval }); visible = true;
                 }
+                dc.DrawLine(midnightPen, new Point(midnightX, y + labelHeight), new Point(midnightX, y + rowHeight));
+                if (showShiftedMidnightLabel) dc.DrawText(shiftedMidnightLabel, new Point(shiftedLabelX, y + 1));
                 y += rowHeight;
             }
-            if (!visible) Text(dc, Words.T("この期間に睡眠記録はありません", "No sleep records in this period"), Left + 12, HeaderHeight + 8, ink, 12);
+            if (!visible) Text(dc, Words.T("この期間に睡眠記録はありません", "No sleep records in this period"), Left + 12, headerHeight + 8, ink, 12);
         }
     }
 }

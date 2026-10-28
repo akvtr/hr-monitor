@@ -29,7 +29,7 @@ namespace HeartRateMonitor
         public bool OyasumiEnabled { get; set; } = true;
         // Zero automatically finds local listeners owned by OyasumiVR.
         public int OyasumiQueryPort { get; set; } = 0;
-        public int SleepDayBoundaryHour { get; set; } = 12;
+        public int SleepDayBoundaryHour { get; set; } = 0;
         // Zero means unlimited; absent fields in older settings also default to unlimited.
         public int RetentionDays { get; set; } = 0;
         internal static readonly int[] RetentionDayOptions = { 0, 1, 7, 30, 90, 365 };

@@ -85,7 +85,7 @@ namespace HeartRateMonitor
             sleepRhythmCard = Card(rhythmGrid, new Thickness(14, 8, 14, 8)); sleepRhythmCard.Margin = new Thickness(0, 0, 0, 8);
             sleepDetail = Label(T("上の睡眠区間を選択してください。", "Select a sleep interval above."), 12, "Text");
             AutomationProperties.SetAutomationId(sleepDetail, "SleepDetail"); sleepDetail.Margin = new Thickness(0, 0, 0, 4);
-            sleepDetailChart = new HeartChart { MinHeight = 120, ShowDateLabels = false };
+            sleepDetailChart = new HeartChart { MinHeight = 120, ShowDateLabels = false, ShowMidnightSeparators = true };
             AutomationProperties.SetAutomationId(sleepDetailChart, "SleepDetailChart");
             AutomationProperties.SetName(sleepDetailChart, T("選択した睡眠区間の心拍グラフ", "Heart-rate chart for the selected sleep interval"));
             var detailGrid = new Grid(); detailGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); detailGrid.RowDefinitions.Add(new RowDefinition());

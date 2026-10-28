@@ -51,6 +51,7 @@ namespace HeartRateMonitor
             oyasumiPort = Input(settings.OyasumiQueryPort.ToString());
             sleepBoundaryChoice = Choice(System.Linq.Enumerable.Range(0, 24).Select(hour => hour.ToString("00") + ":00").ToArray(), settings.SleepDayBoundaryHour, 160);
             AutomationProperties.SetAutomationId(sleepBoundaryChoice, "SleepDayBoundary");
+            sleepBoundaryChoice.ToolTip = T("選んだ時刻から翌日の同じ時刻までを1日として集計します（0〜23時）。", "A sleep day runs from the chosen hour to the same hour the next day (00:00–23:00).");
             AutomationProperties.SetAutomationId(oyasumiEnabled, "OyasumiEnabled");
             AutomationProperties.SetAutomationId(oyasumiPort, "OyasumiQueryPort");
             sleepSettingsStatus = Label("", 12); AutomationProperties.SetAutomationId(sleepSettingsStatus, "OyasumiStatus");
@@ -94,7 +95,7 @@ namespace HeartRateMonitor
             var oyasumiSection = Stack(Heading(T("OyasumiVR連携", "OyasumiVR integration")), oyasumiEnabled,
                 Field(T("OSCQueryポート（0で自動検出）", "OSCQuery port (0 for automatic discovery)"), oyasumiPort),
                 Label(T("同じPCのOyasumiVRでOSCを有効にしてください。2秒ごとに確認し、取得不能な間は睡眠に含めません。", "Enable OSC in OyasumiVR on this PC. Checks every 2 seconds; unavailable periods are excluded."), 12), sleepSettingsStatus,
-                new Border { Height = 12 }, Field(T("睡眠の一日の区切り", "Sleep day starts at"), sleepBoundaryChoice));
+                new Border { Height = 12 }, Field(T("睡眠の一日の開始時刻", "Sleep day starts at"), sleepBoundaryChoice));
             var storageSection = Stack(Heading(T("データ保存", "Data storage")), Field(T("保存期間", "Retention period"), retentionChoice), retentionHelp,
                 new Border { Height = 18 }, Label(T("データ保存先", "Data location"), 12, "Text"), storageLocation);
             var sections = new Grid { VerticalAlignment = VerticalAlignment.Top };

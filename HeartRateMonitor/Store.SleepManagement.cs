@@ -41,7 +41,7 @@ namespace HeartRateMonitor
             if (zone.IsAmbiguousTime(local)) return new DateTimeOffset(local, zone.GetAmbiguousTimeOffsets(local).Max()).ToUnixTimeMilliseconds();
             return new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(local, zone)).ToUnixTimeMilliseconds();
         }
-        public SleepAnalysis LoadSleepAnalysis(DateTime firstDay, DateTime lastDay, TimeZoneInfo zone, int boundaryHour = 12)
+        public SleepAnalysis LoadSleepAnalysis(DateTime firstDay, DateTime lastDay, TimeZoneInfo zone, int boundaryHour = 0)
         {
             firstDay = firstDay.Date; lastDay = lastDay.Date;
             if (lastDay < firstDay || (lastDay - firstDay).TotalDays > 366) throw new ArgumentOutOfRangeException(nameof(lastDay));

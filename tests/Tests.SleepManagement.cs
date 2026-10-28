@@ -13,13 +13,18 @@ internal static partial class Tests
     private static void TestSleepManagement(string folder)
     {
         Check(typeof(Store).GetMethod("DeleteSleepInterval") == null, "sleep records have no manual deletion API");
-        Check(new Settings().SleepDayBoundaryHour == 12, "sleep day defaults to noon for overnight records");
+        Check(new Settings().SleepDayBoundaryHour == 0, "sleep day defaults to local midnight");
         var preferences = new Settings { SleepDayBoundaryHour = 4 };
         string preferencePath = Path.Combine(folder, "sleep-management-settings.json"); preferences.Save(preferencePath);
         Check(Settings.Load(preferencePath).SleepDayBoundaryHour == 4 && preferences.Copy().SleepDayBoundaryHour == 4,
             "sleep day boundary persists and survives settings copying");
         File.WriteAllText(preferencePath, "{}");
-        Check(Settings.Load(preferencePath).SleepDayBoundaryHour == 12, "legacy settings retain the noon sleep boundary default");
+        Check(Settings.Load(preferencePath).SleepDayBoundaryHour == 0, "settings without a saved sleep boundary use midnight");
+        foreach (int hour in new[] { 0, 12, 23 }) {
+            preferences.SleepDayBoundaryHour = hour; preferences.Save(preferencePath);
+            Check(Settings.Load(preferencePath).SleepDayBoundaryHour == hour,
+                "explicit sleep boundary survives reload, including the former default: " + hour);
+        }
         Throws<ArgumentException>(() => new Settings { SleepDayBoundaryHour = -1 }.Validate(), "sleep boundary rejects negative hours");
         Throws<ArgumentException>(() => new Settings { SleepDayBoundaryHour = 24 }.Validate(), "sleep boundary rejects hours after 23");
         string database = Path.Combine(folder, "sleep-management.db");
@@ -46,7 +51,11 @@ internal static partial class Tests
                 new Reading { UnixMs = SleepUtc(4, 0), Bpm = 210 },
                 new Reading { UnixMs = SleepUtc(5, 0), Bpm = 220 }
             }) store.Add(sample);
-            var analysis = store.LoadSleepAnalysis(new DateTime(2026, 1, 1), new DateTime(2026, 1, 5), TimeZoneInfo.Utc);
+            var midnightAnalysis = store.LoadSleepAnalysis(new DateTime(2026, 1, 1), new DateTime(2026, 1, 5), TimeZoneInfo.Utc);
+            Check(midnightAnalysis.RecordedDays == 3 && midnightAnalysis.Days[0].DurationMilliseconds == 3600000 &&
+                midnightAnalysis.Days[1].DurationMilliseconds == 8 * 3600000 && midnightAnalysis.Days[2].DurationMilliseconds == 6 * 3600000,
+                "default midnight analysis splits cross-date sleep at calendar midnight without changing observed duration");
+            var analysis = store.LoadSleepAnalysis(new DateTime(2026, 1, 1), new DateTime(2026, 1, 5), TimeZoneInfo.Utc, 12);
             Check(analysis.Records.Count == 6 && analysis.IncludedCount == 4 && analysis.Days.Count == 5,
                 "sleep records retain excluded and ongoing rows while aggregates select only finished included intervals");
             Check(analysis.RecordedDays == 2 && analysis.AverageDurationMilliseconds == 7.5 * 3600000 && analysis.Days[1].DurationMilliseconds == 7 * 3600000,
@@ -133,8 +142,30 @@ internal static partial class Tests
         long springFrom = Store.SleepDayBoundary(new DateTime(2026, 3, 7), zone, 12);
         long springTo = Store.SleepDayBoundary(new DateTime(2026, 3, 8), zone, 12);
         Check(springTo - springFrom == 23 * 3600000, "sleep day boundaries preserve elapsed duration through daylight saving changes");
+        var midnightBoundaries = typeof(HeartChart).GetMethod("MidnightBoundaries", BindingFlags.NonPublic | BindingFlags.Static);
+        long midnightStart = Store.SleepDayBoundary(new DateTime(2026, 3, 8), zone, 0);
+        long midnightEnd = Store.SleepDayBoundary(new DateTime(2026, 3, 9), zone, 0);
+        var dates = (System.Collections.Generic.List<long>)midnightBoundaries.Invoke(null, new object[] { midnightStart - 3600000, midnightEnd + 3600000, zone });
+        Check(dates.Count == 2 && dates[0] == midnightStart && dates[1] == midnightEnd && dates[1] - dates[0] == 23 * 3600000,
+            "heart chart midnight separators follow local calendar dates through daylight saving changes");
+        dates = (System.Collections.Generic.List<long>)midnightBoundaries.Invoke(null, new object[] { midnightStart, midnightEnd, zone });
+        Check(dates.Count == 0, "midnight separators exclude chart endpoints instead of duplicating edge lines");
+        RunOnSta(() => {
+            var chart = new SleepRhythmChart { Zone = TimeZoneInfo.Utc };
+            var position = typeof(SleepRhythmChart).GetMethod("MidnightPosition", BindingFlags.NonPublic | BindingFlags.Instance);
+            foreach (int hour in new[] { 0, 4, 6, 12, 23 }) {
+                chart.BoundaryHour = hour;
+                double x = (double)position.Invoke(chart, new object[] { new DateTime(2026, 1, 1) });
+                Check(Math.Abs(x - (24 - hour) / 24.0) < 0.000001,
+                    "sleep timeline locates midnight independently of coarse hour ticks: " + hour);
+            }
+            chart.Zone = zone; chart.BoundaryHour = 12;
+            Check(Math.Abs((double)position.Invoke(chart, new object[] { new DateTime(2026, 3, 7) }) - 12 / 23.0) < 0.000001,
+                "sleep timeline midnight marker respects actual elapsed duration on a daylight-saving day");
+        }, "Sleep midnight marker geometry verification failed");
 
         string monitorDatabase = Path.Combine(folder, "sleep-management-monitor.db");
+        using (var initialized = new Store(monitorDatabase)) { }
         int unavailable = 0;
         var monitorSettings = new Settings { OyasumiEnabled = true, OyasumiQueryPort = 1 };
         var monitor = new OyasumiSleepMonitor(monitorDatabase, monitorSettings,

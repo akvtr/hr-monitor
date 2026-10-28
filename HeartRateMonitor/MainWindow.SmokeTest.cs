@@ -11,6 +11,7 @@ namespace HeartRateMonitor
 {
     public sealed partial class MainWindow
     {
+        private Action<string> sleepSmokeCapture;
         public void EnableSmokeTest(string path, bool compact = false)
         {
             smokeTest = true;
@@ -21,6 +22,7 @@ namespace HeartRateMonitor
                     var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
                     using (var stream = File.Create(Path.Combine(Path.GetDirectoryName(path), name + ".png"))) encoder.Save(stream);
                 };
+                sleepSmokeCapture = capture;
                 await Task.Delay(300);
                 string checksPath = Path.Combine(Path.GetDirectoryName(path), "smoke-checks.txt");
                 File.WriteAllText(checksPath, "");
