@@ -64,6 +64,7 @@ internal static partial class Tests
             TestOscReceiveTimeout(folder);
             TestHistoryRepository(folder);
             TestStoreBounds(folder);
+            TestSleepRangeMerging(folder);
             TestHistoryRefreshPreservesNavigation(folder);
             TestHistoryReadSnapshot(folder);
             TestSnapshotFailurePreservation(folder);
