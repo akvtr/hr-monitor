@@ -186,21 +186,33 @@ try {
     Start-Sleep -Milliseconds 100
     foreach ($sleepControl in @('SleepAverageHeart','SleepAverageDuration','SleepTypicalTime','SleepRangeChoice','SleepFromDate','SleepToDate','SleepApplyRange','SleepDetail','SleepRhythmPrevious','SleepRhythmNext')) { [void](Find-Control $sleepControl) }
     function Assert-SleepFits {
-        foreach ($removedSleepId in @('SleepRecords','SleepDelete','SleepExclude','SleepOpenHistory')) {
-            $removedSleepCondition = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::AutomationIdProperty, $removedSleepId)
-            if ($window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $removedSleepCondition)) { throw "Removed sleep management control remains: $removedSleepId" }
-        }
         $sleepWindowRect = $window.Current.BoundingRectangle
-        foreach ($visibleSleepId in @('SleepAverageHeart','SleepAverageDuration','SleepTypicalTime','SleepRangeChoice','SleepDetail','SleepRhythmPrevious','SleepRhythmNext')) {
+        $visibleSleepIds = @('SleepAverageHeart','SleepAverageDuration','SleepTypicalTime','SleepRangeChoice','SleepDetail','SleepRhythmView','SleepLabelsView')
+        $labelsSelected = (Find-Control 'SleepLabelsView').GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Current.IsSelected
+        if ($labelsSelected) { $visibleSleepIds += @('SleepLabelList','SleepLabelEmpty','SleepLabelDelete') }
+        else { $visibleSleepIds += @('SleepRhythmPrevious','SleepRhythmNext') }
+        foreach ($visibleSleepId in $visibleSleepIds) {
             $sleepElement = Find-Control $visibleSleepId
             $sleepRect = $sleepElement.Current.BoundingRectangle
             if ($sleepElement.Current.IsOffscreen -or $sleepRect.Width -le 0 -or $sleepRect.Height -le 0 -or $sleepRect.Left -lt $sleepWindowRect.Left -or $sleepRect.Right -gt $sleepWindowRect.Right -or $sleepRect.Bottom -gt $sleepWindowRect.Bottom) { throw "Sleep content is outside its single-screen viewport: $visibleSleepId" }
         }
     }
+    function Assert-EmptySleepLabels {
+        (Find-Control 'SleepLabelsView').GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
+        Start-Sleep -Milliseconds 150
+        Assert-SleepFits
+        if ((Find-Control 'SleepLabelDelete').Current.IsEnabled) { throw 'An empty label list must not allow deletion.' }
+        if ((Find-Control 'SleepLabelList').GetCurrentPattern([System.Windows.Automation.SelectionPattern]::Pattern).Current.GetSelection().Count -ne 0) { throw 'An empty label list must not have a stale selection.' }
+        (Find-Control 'SleepRhythmView').GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
+        Start-Sleep -Milliseconds 150
+        Assert-SleepFits
+    }
     Assert-SleepFits
+    Assert-EmptySleepLabels
     $transform.Resize(1020,760)
     Start-Sleep -Milliseconds 250
     Assert-SleepFits
+    Assert-EmptySleepLabels
     $transform.Resize(1200,880)
     $sleepDateValue = (Find-Control 'SleepFromDate').GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
     $validSleepDate = $sleepDateValue.Current.Value
@@ -217,7 +229,7 @@ try {
     Start-Sleep -Milliseconds 150
     if ((Find-Control 'SleepRangeChoice').GetCurrentPattern([System.Windows.Automation.SelectionPattern]::Pattern).Current.GetSelection()[0].Current.Name -ne $sleepPeriod) { throw 'Returning to Sleep changed its period selector.' }
     Assert-SleepFits
-    Write-Output 'PASS Sleep metrics, timeline navigation and selected graph fit one screen without record list or deletion actions'
+    Write-Output 'PASS Sleep metrics, rhythm, empty label list and selected graph fit one screen; view switching preserves safe empty selection'
     (Find-Control 'Tab2').GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
     function Select-Retention([string]$label) {
         $retention = Find-Control 'RetentionChoice'
@@ -272,6 +284,7 @@ try {
     $transform.Resize(1020,760)
     Start-Sleep -Milliseconds 250
     Assert-SleepFits
+    Assert-EmptySleepLabels
     $transform.Resize(1200,880)
     (Find-Control 'Tab2').GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
     Write-Output 'PASS Sleep overview remains reachable after applying English'

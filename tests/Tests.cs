@@ -57,6 +57,7 @@ internal static partial class Tests
             TestWindowShutdownAfterConnectionFailure(folder);
             TestWindowShutdownWithStoppedWriter(folder);
             TestWindowShutdownWaitsForExport(folder);
+            TestWindowShutdownWaitsForSleepDeletion(folder);
             TestRecordingErrorDiagnostics(folder);
             TestStartupErrorDiagnostics(folder);
             TestOscErrorDiagnostics(folder);
@@ -100,6 +101,7 @@ internal static partial class Tests
             TestStoreTextValidation(folder);
             TestOyasumiSleep(folder);
             TestSleepManagement(folder);
+            TestSleepDeletion(folder);
             TestOyasumiDiscoveryCancellation(folder);
             TestRetentionBoundary(folder);
             TestStartupRetention(folder);

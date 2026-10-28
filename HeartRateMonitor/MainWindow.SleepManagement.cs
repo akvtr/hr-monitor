@@ -69,7 +69,7 @@ namespace HeartRateMonitor
             sleepSampleNotice = Label("", 11); sleepSampleNotice.Margin = new Thickness(0, 4, 0, 0);
             var overview = Card(Stack(metrics, sleepSampleNotice), new Thickness(14, 10, 14, 10)); overview.Margin = new Thickness(0, 0, 0, 8);
             sleepRhythm = new SleepRhythmChart();
-            sleepRhythm.IntervalSelected += async id => { sleepSelectedId = id; await ShowSleepDetail(); };
+            sleepRhythm.IntervalSelected += async id => { sleepSelectedId = id; CancelSleepLabelDeletion(false); await ShowSleepDetail(); };
             sleepRhythmPrevious = Button("←", async (s, e) => await ChangeSleepRhythmPage(-1), id: "SleepRhythmPrevious", width: 36);
             sleepRhythmNext = Button("→", async (s, e) => await ChangeSleepRhythmPage(1), id: "SleepRhythmNext", width: 36);
             foreach (var action in new[] { sleepRhythmPrevious, sleepRhythmNext }) { action.Height = 28; action.Margin = new Thickness(6, 0, 0, 0); action.Style = (Style)FindResource("ConnectionAction"); }
@@ -78,10 +78,11 @@ namespace HeartRateMonitor
             sleepRhythmRange = Label("", 11); sleepRhythmRange.VerticalAlignment = VerticalAlignment.Center;
             AutomationProperties.SetAutomationId(sleepRhythmRange, "SleepRhythmRange");
             var rhythmHeader = new DockPanel { Margin = new Thickness(0, 0, 0, 4) };
-            var paging = Horizontal(sleepRhythmRange, sleepRhythmPrevious, sleepRhythmNext); DockPanel.SetDock(paging, Dock.Right); rhythmHeader.Children.Add(paging);
-            rhythmHeader.Children.Add(Label(T("睡眠リズム", "Sleep rhythm"), 14, "Text"));
+            sleepRhythmPaging = Horizontal(sleepRhythmRange, sleepRhythmPrevious, sleepRhythmNext); DockPanel.SetDock(sleepRhythmPaging, Dock.Right); rhythmHeader.Children.Add(sleepRhythmPaging);
+            rhythmHeader.Children.Add(SleepLabelViewSwitch());
             var rhythmGrid = new Grid(); rhythmGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); rhythmGrid.RowDefinitions.Add(new RowDefinition());
-            rhythmGrid.Children.Add(rhythmHeader); Grid.SetRow(sleepRhythm, 1); rhythmGrid.Children.Add(sleepRhythm);
+            rhythmGrid.Children.Add(rhythmHeader);
+            var sleepContent = SleepLabelContent(); Grid.SetRow(sleepContent, 1); rhythmGrid.Children.Add(sleepContent);
             sleepRhythmCard = Card(rhythmGrid, new Thickness(14, 8, 14, 8)); sleepRhythmCard.Margin = new Thickness(0, 0, 0, 8);
             sleepDetail = Label(T("上の睡眠区間を選択してください。", "Select a sleep interval above."), 12, "Text");
             AutomationProperties.SetAutomationId(sleepDetail, "SleepDetail"); sleepDetail.Margin = new Thickness(0, 0, 0, 4);
@@ -89,7 +90,7 @@ namespace HeartRateMonitor
             AutomationProperties.SetAutomationId(sleepDetailChart, "SleepDetailChart");
             AutomationProperties.SetName(sleepDetailChart, T("選択した睡眠区間の心拍グラフ", "Heart-rate chart for the selected sleep interval"));
             var detailGrid = new Grid(); detailGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); detailGrid.RowDefinitions.Add(new RowDefinition());
-            detailGrid.Children.Add(sleepDetail); Grid.SetRow(sleepDetailChart, 1); detailGrid.Children.Add(sleepDetailChart);
+            detailGrid.Children.Add(SleepLabelDetailHeader()); Grid.SetRow(sleepDetailChart, 1); detailGrid.Children.Add(sleepDetailChart);
             sleepDetailCard = Card(detailGrid, new Thickness(14, 10, 14, 8));
             sleepStatus = Label("", 11); AutomationProperties.SetAutomationId(sleepStatus, "SleepStatus");
             AutomationProperties.SetLiveSetting(sleepStatus, AutomationLiveSetting.Polite); sleepStatus.Margin = new Thickness(0, 4, 0, 0);
@@ -105,6 +106,7 @@ namespace HeartRateMonitor
             sleepPage.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             var sections = new UIElement[] { header, overview, sleepRhythmCard, sleepDetailCard, footer };
             for (int i = 0; i < sections.Length; i++) { Grid.SetRow(sections[i], i); sleepPage.Children.Add(sections[i]); }
+            UpdateSleepLabelView();
             return sleepPage;
         }
 
@@ -137,6 +139,7 @@ namespace HeartRateMonitor
                 var result = await Task.Run(() => { using (var store = new Store(database)) return store.LoadSleepAnalysis(first, last, TimeZoneInfo.Local, boundary); });
                 if (closing || revision != sleepManagementRevision) return;
                 sleepAnalysis = result;
+                UpdateSleepLabelRows();
                 if (sleepRangeFirstDay != first || sleepRangeLastDay != last) sleepRhythmPageOffset = 0;
                 sleepRangeFirstDay = first; sleepRangeLastDay = last;
                 sleepAverageHeart.Text = result.AverageHeartRate.HasValue ? result.AverageHeartRate.Value.ToString("0.0") + " bpm" : "—";
@@ -152,7 +155,12 @@ namespace HeartRateMonitor
                 sleepManagementRefreshAt = DateTime.UtcNow.AddSeconds(10); sleepManagementNextMinute = DateTime.UtcNow.AddMinutes(1);
             } catch (Exception ex) {
                 if (revision == sleepManagementRevision && !closing) { sleepStatus.Text = T("睡眠記録を読み込めません: ", "Could not load sleep records: ") + ex.Message; sleepManagementRefreshAt = DateTime.UtcNow.AddSeconds(15); sleepManagementNextMinute = sleepManagementRefreshAt; }
-            } finally { if (revision == sleepManagementRevision) sleepManagementLoading = false; }
+            } finally {
+                if (revision == sleepManagementRevision) {
+                    sleepManagementLoading = false;
+                    SynchronizeSleepLabelSelection(sleepAnalysis?.Records.FirstOrDefault(r => r.Interval.Id == sleepSelectedId));
+                }
+            }
         }
 
         private async Task ChangeSleepRhythmPage(int direction)
@@ -170,7 +178,9 @@ namespace HeartRateMonitor
             int boundary = settings.SleepDayBoundaryHour;
             long from = Store.SleepDayBoundary(first, TimeZoneInfo.Local, boundary), to = Store.SleepDayBoundary(last.AddDays(1), TimeZoneInfo.Local, boundary);
             var visible = sleepAnalysis.Records.Where(r => r.Interval.From < to && r.Interval.To > from).OrderByDescending(r => r.Interval.From).ToList();
-            if (!visible.Any(r => r.Interval.Id == sleepSelectedId)) sleepSelectedId = visible.FirstOrDefault()?.Interval.Id;
+            if (sleepLabelListMode) {
+                if (!sleepAnalysis.Records.Any(r => r.Interval.Id == sleepSelectedId)) sleepSelectedId = sleepAnalysis.Records.OrderByDescending(r => r.Interval.From).ThenByDescending(r => r.Interval.Id).FirstOrDefault()?.Interval.Id;
+            } else if (!visible.Any(r => r.Interval.Id == sleepSelectedId)) sleepSelectedId = visible.FirstOrDefault()?.Interval.Id;
             sleepRhythm.SelectedId = sleepSelectedId;
             sleepRhythm.SetData(visible.Select(r => r.Interval).ToList(), first, last, boundary, TimeZoneInfo.Local);
             sleepRhythmRange.Text = first.ToString("MM/dd") + " – " + last.ToString("MM/dd");
@@ -182,12 +192,16 @@ namespace HeartRateMonitor
         {
             int revision = ++sleepDetailRevision;
             var record = sleepAnalysis?.Records.FirstOrDefault(r => r.Interval.Id == sleepSelectedId);
+            SynchronizeSleepLabelSelection(record);
             sleepRhythm.SelectedId = record?.Interval.Id; sleepRhythm.Refresh();
             sleepDetailChart.Points = new System.Collections.Generic.List<ChartPoint>(); sleepDetailChart.Average = null;
             sleepDetailChart.From = record?.Interval.From ?? Store.SleepDayBoundary(sleepRhythm.FirstDay, TimeZoneInfo.Local, settings.SleepDayBoundaryHour);
             sleepDetailChart.To = record?.Interval.To ?? Store.SleepDayBoundary(sleepRhythm.LastDay.AddDays(1), TimeZoneInfo.Local, settings.SleepDayBoundaryHour);
             sleepDetailChart.InvalidateVisual();
-            if (record == null) { sleepDetail.Text = T("上の睡眠区間を選択してください。", "Select a sleep interval above."); return; }
+            if (record == null) {
+                sleepDetail.Text = sleepAnalysis?.Records.Count == 0 ? T("この期間に睡眠ラベルはありません。", "No sleep labels in this period.") : T("上の睡眠区間を選択してください。", "Select a sleep interval above.");
+                return;
+            }
             var interval = record.Interval;
             string time = LocalTime(interval.From) + " → " + LocalTime(interval.To);
             sleepDetail.Text = time + " · " + (record.Summary.Count > 0 ? T($"平均 {record.Summary.Average:0.0} bpm", $"Avg {record.Summary.Average:0.0} bpm") : T("心拍データなし", "No heart-rate data")) +

@@ -105,11 +105,7 @@ namespace HeartRateMonitor
             await RefreshSleepManagement(); sleepRhythm.SelectInterval(smokeSleepId); await ShowSleepDetail();
             await VerifySleepBoundarySettings();
 
-            foreach (string field in new[] { "sleepRecords", "sleepDeleteButton", "sleepExcludeButton", "sleepHistoryButton" })
-                if (GetType().GetField(field, BindingFlags.Instance | BindingFlags.NonPublic) != null)
-                    throw new InvalidOperationException("Sleep must not retain the removed record list or management actions: " + field);
-            if (GetType().GetMethod("DeleteSelectedSleep", BindingFlags.Instance | BindingFlags.NonPublic) != null)
-                throw new InvalidOperationException("Sleep record deletion must not remain callable from the window.");
+            await VerifySleepLabelManagement();
             if (sleepAnalysis.Records.Count != recordCount)
                 throw new InvalidOperationException("Viewing and selecting sleep intervals must preserve every stored sleep record.");
             using (var store = new Store(database))
@@ -155,11 +151,13 @@ namespace HeartRateMonitor
             if (sleepPage == null || sleepPage.ActualHeight < 1 || sleepPage.DesiredSize.Width > sleepPage.ActualWidth + 1 ||
                 sleepPage.DesiredSize.Height > sleepPage.ActualHeight + 1)
                 throw new InvalidOperationException("The sleep page must fit its viewport without page scrolling.");
-            foreach (FrameworkElement chart in new FrameworkElement[] { sleepRhythm, sleepDetailChart }) {
+            FrameworkElement upper = sleepLabelConfirmation.Visibility == Visibility.Visible ? (FrameworkElement)sleepLabelConfirmation :
+                sleepLabelListMode ? sleepLabelList : (FrameworkElement)sleepRhythm;
+            foreach (FrameworkElement chart in new FrameworkElement[] { upper, sleepDetailChart }) {
                 Point corner = chart.TranslatePoint(new Point(), sleepPage);
                 if (chart.ActualWidth < 250 || chart.ActualHeight < 100 || corner.X < -1 || corner.Y < -1 ||
                     corner.X + chart.ActualWidth > sleepPage.ActualWidth + 1 || corner.Y + chart.ActualHeight > sleepPage.ActualHeight + 1)
-                    throw new InvalidOperationException("Both sleep charts must remain visible within one screen.");
+                    throw new InvalidOperationException("The active sleep view and selected heart-rate graph must remain visible within one screen.");
             }
         }
     }

@@ -104,7 +104,7 @@ namespace HeartRateMonitor
             // Discovery continuations may need the UI dispatcher. Do not synchronously
             // wait for them during Windows session shutdown; only wait for independent disk work.
             _ = automatic.StopAsync(); _ = bluetooth.StopAsync();
-            try { Task.Run(() => Task.WhenAll(engine.StopAsync(), sleepMonitor.StopAsync(), historyExport)).GetAwaiter().GetResult(); }
+            try { Task.Run(() => Task.WhenAll(engine.StopAsync(), sleepMonitor.StopAsync(), historyExport, sleepLabelWrite)).GetAwaiter().GetResult(); }
             catch (Exception ex) { connectionLog.Add("Session ending: " + ex.Message); }
             tray?.Dispose(); canClose = true;
         }
@@ -242,8 +242,8 @@ namespace HeartRateMonitor
             BeginShutdown(); IsEnabled = false;
             try { await Task.WhenAll(automatic.StopAsync(), bluetooth.StopAsync(), manualSearch); }
             catch (Exception ex) { connectionLog.Add("Connection shutdown: " + ex); }
-            try { await historyExport; }
-            catch (Exception ex) { connectionLog.Add("CSV shutdown: " + ex); }
+            try { await Task.WhenAll(historyExport, sleepLabelWrite); }
+            catch (Exception ex) { connectionLog.Add("Data operation shutdown: " + ex); }
             // Drain accepted readings even when a connection or discovery task failed to stop.
             try { await Task.WhenAll(engine.StopAsync(), sleepMonitor.StopAsync()); }
             catch (Exception ex) { connectionLog.Add("Recording shutdown: " + ex); }

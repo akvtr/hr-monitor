@@ -12,7 +12,6 @@ internal static partial class Tests
 
     private static void TestSleepManagement(string folder)
     {
-        Check(typeof(Store).GetMethod("DeleteSleepInterval") == null, "sleep records have no manual deletion API");
         Check(new Settings().SleepDayBoundaryHour == 0, "sleep day defaults to local midnight");
         var preferences = new Settings { SleepDayBoundaryHour = 4 };
         string preferencePath = Path.Combine(folder, "sleep-management-settings.json"); preferences.Save(preferencePath);

@@ -223,6 +223,36 @@
       </ControlTemplate.Triggers>
     </ControlTemplate></Setter.Value></Setter>
   </Style>
+  <DataTemplate x:Key="SleepLabelTemplate">
+    <Grid Margin="10,7">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+      <StackPanel VerticalAlignment="Center">
+        <TextBlock Text="{Binding Range}" Foreground="{DynamicResource Text}" FontSize="12" TextWrapping="Wrap"/>
+        <TextBlock Text="{Binding State}" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="0,3,0,0"/>
+      </StackPanel>
+      <TextBlock Grid.Column="1" Text="{Binding Duration}" Foreground="{DynamicResource Text}" FontSize="14" FontWeight="SemiBold" Margin="16,0,0,0" VerticalAlignment="Center"/>
+    </Grid>
+  </DataTemplate>
+  <Style x:Key="SleepLabelItem" TargetType="ListBoxItem">
+    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+    <Setter Property="AutomationProperties.Name" Value="{Binding AccessibleText}"/>
+    <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem">
+      <Border x:Name="Shell" Background="Transparent" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" SnapsToDevicePixels="True">
+        <Grid>
+          <ContentPresenter HorizontalAlignment="Stretch"/>
+          <Border x:Name="SelectedLine" Width="3" Background="{DynamicResource Accent}" HorizontalAlignment="Left" Visibility="Collapsed"/>
+          <Border x:Name="FocusRing" BorderBrush="{DynamicResource Focus}" BorderThickness="1" Visibility="Collapsed" IsHitTestVisible="False"/>
+        </Grid>
+      </Border>
+      <ControlTemplate.Triggers>
+        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Shell" Property="Background" Value="{DynamicResource Hover}"/></Trigger>
+        <Trigger Property="IsSelected" Value="True"><Setter TargetName="Shell" Property="Background" Value="{DynamicResource AccentSoft}"/><Setter TargetName="SelectedLine" Property="Visibility" Value="Visible"/></Trigger>
+        <Trigger Property="IsKeyboardFocusWithin" Value="True"><Setter TargetName="FocusRing" Property="Visibility" Value="Visible"/></Trigger>
+        <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.55"/></Trigger>
+      </ControlTemplate.Triggers>
+    </ControlTemplate></Setter.Value></Setter>
+  </Style>
   <Style x:Key="SettingsNavigationItem" TargetType="RadioButton">
     <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
     <Setter Property="FontSize" Value="13"/><Setter Property="MinHeight" Value="44"/>
