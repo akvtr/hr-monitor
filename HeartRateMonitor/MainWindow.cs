@@ -18,6 +18,7 @@ namespace HeartRateMonitor
         private readonly string folder, database, settingsPath;
         private readonly HistoryRepository history;
         private Settings settings;
+        private bool settingsLoadFailed;
         private readonly BluetoothMonitor bluetooth = new BluetoothMonitor();
         private readonly AutoConnector automatic;
         private readonly ConnectionLog connectionLog;
@@ -44,7 +45,7 @@ namespace HeartRateMonitor
             connectionLog = new ConnectionLog(folder); connectionLog.Add("Heart Rate Monitor " + AppVersion.Product + " / startup");
             string warning = null;
             try { settings = Settings.Load(settingsPath); }
-            catch (Exception ex) { settings = new Settings { OscEnabled = false }; warning = "Settings could not be loaded. OSC disabled. " + ex.Message; }
+            catch (Exception ex) { settings = new Settings { OscEnabled = false }; settingsLoadFailed = true; warning = "Settings could not be loaded. OSC disabled. " + ex.Message; }
             Words.Language = settings.Language;
             automatic = new AutoConnector(bluetooth);
             Title = "Heart Rate Monitor " + AppVersion.Product + " · BLE / VRChat";

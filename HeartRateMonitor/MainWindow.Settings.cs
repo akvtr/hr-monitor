@@ -147,7 +147,9 @@ namespace HeartRateMonitor
                 if (!int.TryParse(oyasumiPort.Text, out value)) throw new ArgumentException(T("OSCQueryポートは整数で入力してください。", "OSCQuery port must be an integer."));
                 next.OyasumiQueryPort = value;
                 next.SleepDayBoundaryHour = sleepBoundaryChoice.SelectedIndex;
-                next.Validate(); next.Save(settingsPath); settings = next; engine.Configure(next); sleepMonitor.Configure(next); Words.Language = next.Language;
+                next.Validate(); next.Save(settingsPath, keepBackup: !settingsLoadFailed);
+                settingsLoadFailed = false;
+                settings = next; engine.Configure(next); sleepMonitor.Configure(next); Words.Language = next.Language;
                 BuildUi(); ApplyThemeTransition(true); tray?.Refresh(); Tick(); settingsStatus.Text = T("設定を保存・適用しました。", "Settings saved and applied.");
             } catch (Exception ex) { settingsStatus.Text = T("保存できません: ", "Could not save: ") + ex.Message; }
         }

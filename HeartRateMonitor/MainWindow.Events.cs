@@ -17,7 +17,10 @@ namespace HeartRateMonitor
                 settings.LastAddress = choice.Address; settings.LastName = choice.Name;
                 settings.LastDeviceVerified = true; settings.LastDeviceId = choice.DeviceId;
                 settings.LastAddressType = choice.AddressType.HasValue ? (int)choice.AddressType.Value : -1;
-                try { settings.Save(settingsPath); } catch (Exception ex) { errorText.Text = ex.Message; }
+                // Keep the original settings and recovery backup until an explicit save succeeds.
+                if (!settingsLoadFailed) {
+                    try { settings.Save(settingsPath); } catch (Exception ex) { errorText.Text = ex.Message; }
+                }
             });
             bluetooth.Received += engine.Accept;
         }

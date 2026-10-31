@@ -102,7 +102,7 @@ namespace HeartRateMonitor
             }
             return utf8.GetString(bytes);
         }
-        public void Save(string path)
+        public void Save(string path, bool keepBackup = true)
         {
             Validate();
             string destination = Path.GetFullPath(path);
@@ -110,7 +110,7 @@ namespace HeartRateMonitor
             Directory.CreateDirectory(Path.GetDirectoryName(destination));
             AtomicFile.Write(destination, stream => {
                 using (var writer = new StreamWriter(stream, new UTF8Encoding(false), 1024, true)) writer.Write(json);
-            }, keepBackup: true);
+            }, keepBackup: keepBackup);
         }
     }
 }

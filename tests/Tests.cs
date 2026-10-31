@@ -74,6 +74,7 @@ internal static partial class Tests
             TestStoreInputBoundaries(folder);
             TestSettingsPersistence(folder);
             TestSettingsApplyAfterSave(folder);
+            TestSettingsRecoveryAfterConnection(folder);
             TestAtomicFileWrites(folder);
             TestAtomicFileCleanupFailure(folder);
             TestConnectionLog(folder);

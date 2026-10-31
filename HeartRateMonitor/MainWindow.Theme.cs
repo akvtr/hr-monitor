@@ -34,7 +34,8 @@ namespace HeartRateMonitor
                 var next = settings.Copy();
                 next.Theme = ThemeManager.IsDark(settings.Theme) ? "Light" : "Dark";
                 // Persist only the theme; preserve unapplied edits in the Settings page.
-                next.Save(settingsPath); settings = next;
+                if (!settingsLoadFailed) next.Save(settingsPath);
+                settings = next;
                 themeChoice.SelectedIndex = next.Theme == "Dark" ? 1 : 2;
                 ApplyThemeTransition(true);
             } catch (Exception ex) { errorText.Text = T("テーマを保存できません: ", "Could not save theme: ") + ex.Message; }
