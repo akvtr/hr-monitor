@@ -1,6 +1,10 @@
-# AGENTS.md
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 These instructions apply to the entire repository. Keep this file in English.
+
+`README.en.md` / `README.md` are the detailed behavior specification (thresholds, formulas, CSV schema, retention, sleep metrics).
 
 ## Working Process
 
@@ -46,11 +50,40 @@ For UI changes, also run UI automation on an interactive desktop.
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\ui-smoke.ps1
 ```
 
+Other commands:
+
+```powershell
+# Re-run the already-built tests without recompiling
+.\artifacts\HeartRateMonitor.Tests.exe
+
+# Rendering checks across languages and themes; writes PNGs and smoke-checks.txt to the data directory
+.\artifacts\HeartRateMonitor.exe --data-dir .\artifacts\logs\verification\render --smoke-test
+
+# Also build and run the Bluetooth diagnostic (touches the real adapter)
+powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -Test -Diagnostic
+```
+
 - UI verification code lives in `HeartRateMonitor/MainWindow.SmokeTest.cs`, other `*SmokeTest.cs` files, and `tests/ui-smoke.ps1`.
 - Launch manually with `.\artifacts\HeartRateMonitor.exe`. For isolated rendering checks, pass `--data-dir <isolated-directory> --smoke-test`.
 - Use temporary or isolated test data, never the normal user database.
 - Documentation-only changes do not require builds or UI automation. Check referenced paths, commands, and consistency with the implementation instead.
 - Review the diff and run `git diff --check` before committing. Report completed verification and any physical-sensor or VRChat verification limitations accurately.
+- **No single-test filter exists.** `HeartRateMonitor.Tests.exe` takes no arguments and `Tests.Main` calls every suite in sequence. To focus on one suite, temporarily comment out the other calls in `tests/Tests.cs` and restore them before committing.
+- The first failed `Check` throws and ends the run, so later suites do not execute. Failures print the temporary artifacts folder.
+- Exit a running copy from the tray before building; a running `artifacts/HeartRateMonitor.exe` cannot be replaced. Instances are keyed per data directory, so a `--data-dir` instance can run beside the normal one, but it still locks the EXE.
+
+### Testing Seams
+
+Tests run without hardware. They exercise logic through injected delegates and internal constructors (for example the `AutoConnector` delay, the `RecordingEngine` retention interval, and the `ReceptionTimer` timestamp source) and use a per-run temporary folder. Prefer adding a seam of this kind over waiting on real time or real devices.
+
+## Build Model
+
+There is no `.csproj` or NuGet. `build.ps1` invokes Roslyn directly, so these things differ from a typical .NET project:
+
+- Every `HeartRateMonitor/**/*.cs` file is compiled automatically. New assembly references and embedded resources must be added to `build.ps1`.
+- WPF XAML is not compiled, and windows have no markup. The UI is built in C# (`MainWindow.BuildUi` and the `MainWindow.*` partials). `Theme.xaml` is embedded and loaded at runtime with `XamlReader`; `AppIcon.xaml` is consumed at build time by `tools/generate-app-icon.ps1`.
+- Tests compile from `tests/Tests*.cs` and reference the built EXE, reaching internals through `InternalsVisibleTo("HeartRateMonitor.Tests")`. **A new `Test...` method only runs once it is called from `Tests.Main`**; nothing discovers tests automatically.
+- `*SmokeTest.cs` partials ship inside the main EXE and are activated by `--smoke-test`. `tests/ui-smoke.ps1` loads the EXE by reflection and uses `Store` and `Reading` to seed data, so those types must stay public.
 
 ## Build Artifacts
 
@@ -60,6 +93,54 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\ui-smoke.ps1
 - Save finalized version snapshots in `artifacts/versions/version-X.Y.Z/` only when explicitly instructed by the user. Never create them automatically after implementation, builds, or tests.
 - Reserve existing `artifacts/versions/version-0.0.0/` for unversioned legacy artifacts.
 - Generated files are not source. Reorganizing them does not change product versions.
+
+## Architecture
+
+`MainWindow` is the composition root: it owns every long-lived component and wires them together with events (`MainWindow.Events.cs`).
+
+### Reading pipeline
+
+```
+BluetoothMonitor.Received -> RecordingEngine.Accept -> bounded queue -> worker: Store.Add, then OSC send
+                                                                     -> Processed event -> MainWindow (via Ui)
+```
+
+- `RecordingEngine` runs one worker task that serializes readings, one-shot OSC tests, retention pruning, and the OSC silence timeout. Add work of this kind as a new `WorkKind` rather than a new thread.
+- A storage failure does not stop the OSC send, and observer exceptions are isolated in `NotifyObservers`.
+- Engine and monitor events fire off the UI thread. Handlers must marshal through `MainWindow.Ui(...)`, which also drops work once closing has begun.
+- Silence is measured by the monotonic `ReceptionTimer`, never by wall-clock time. Stored timestamps are UTC Unix milliseconds.
+
+### Connection
+
+- `AutoConnector` holds the discovery, candidate, and retry policy over the `IHeartRateDiscovery` interface so it can be tested without WinRT. `BluetoothMonitor` implements that interface; `GattAccess` handles GATT.
+- `ConnectionUpdate.Classify` picks user advice by matching exception **message text**, including Japanese fragments (`タイムアウト`, `アダプター`, `20秒`) and WinRT status names. Changing those messages in the connection code silently changes the advice shown.
+
+### Persistence
+
+- `Store` is a partial class over hand-written `winsqlite3.dll` P/Invoke (`Store.Native.cs`). There is no migration framework: the constructor applies idempotent `CREATE ... IF NOT EXISTS` schema statements on every open, so schema changes must be safe against existing user databases.
+- A `Store` is not shared across owners. The engine worker and `OyasumiSleepMonitor` each hold their own connection, and `HistoryRepository` opens one per operation so background reads never share a UI-owned `Store`. Use `ReadSnapshot` when several queries must see one consistent view.
+- "Valid" readings mean `bpm > 0` and contact not explicitly false (`ValidReadingCondition`; `MainWindow.Received` and `RecordingEngine.SendReading` apply the same rule in C#). All readings are stored and exported to CSV, but statistics, charts, and OSC use only valid ones.
+- Time ranges are half-open `[from, to)` throughout.
+
+### Settings
+
+- `Settings` is a mutable POCO serialized by `JavaScriptSerializer`. Fields absent from older files keep their property initializers, so **the initializer is the migration default**.
+- Pass `Copy()` snapshots across threads. The apply path is `MainWindow.Settings.cs`: validate, save (`AtomicFile`), then `engine.Configure` and `sleepMonitor.Configure`, then `BuildUi()`.
+- A new field usually needs a `Validate` rule and, if it affects timeout output, a comparison in `RecordingEngine.CheckOscTimeout` so the fallback re-arms.
+- `settingsLoadFailed` puts the app in a safe mode (OSC disabled, automatic saves suspended) that preserves the original file and its backup. New code that saves settings outside the explicit Save action must honor it.
+
+### Sleep integration
+
+`OyasumiSleepMonitor` polls OyasumiVR over OSCQuery on its own background task and records intervals through `SleepIntervalTracker`. Discovery, the state reader, and the interval are constructor-injected for tests. Any failure or configuration change closes the open interval, because unobserved time must never be recorded as sleep. Heart-rate readings and sleep labels are independent data.
+
+### UI conventions
+
+- Text is inline at the call site as `Words.T("日本語", "English")`; there are no resource files. Changing language rebuilds the UI with `BuildUi()`, so view state that must survive cannot live only in controls. Some connection status strings written to the log are Japanese only.
+- Reference colors with `SetResourceReference` and keys from `Theme.xaml`. `HeartChart` and `SleepRhythmChart` draw in `OnRender`, so they must be invalidated on theme change; add any new custom-drawn chart to `MainWindow.ApplyThemeTransition`.
+
+### Shutdown
+
+There are two shutdown paths: `MainWindow.OnClosing` (async) and `MainWindow.EndSession` (blocking, for Windows session end). New background disk work must be tracked as a `Task` and awaited in **both**, as `historyExport` and `sleepLabelWrite` are, so that exit does not abandon it.
 
 ## Product Requirements
 
@@ -111,3 +192,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\ui-smoke.ps1
 - Use only change-description bullet lists under applicable top-level headings: `Added`, `Changed`, `Fixed`, and `Removed` (or `Deleted`). Omit empty categories.
 - Start each bullet with the corresponding verb, for example `- Added ...`.
 - Do not include test results or counts, verification notes, SHA/checksums, installation instructions, or other supplementary sections or prose.
+
+## Local Files
+
+`TODO.md` is a gitignored, Japanese, local feature backlog; consult it when asked what to work on next. `.agents/`, `.dotnet-home/`, and `artifacts/` are also gitignored.
